@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vpp-mcp"
+version = "0.1.0"
+description = "MCP server for reading and editing Visual Paradigm .vpp projects (class model, class diagram, sequence diagrams)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Nikodem5" }]
+requires-python = ">=3.10"
+dependencies = ["mcp>=1.9,<2"]
+keywords = ["mcp", "visual-paradigm", "uml", "claude"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://github.com/Nikodem5/vpp-mcp"
+
+[project.scripts]
+vpp-mcp = "vpp_mcp.server:main"
+
+[tool.setuptools]
+packages = ["vpp_mcp"]

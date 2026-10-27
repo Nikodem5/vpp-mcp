@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+*.vpp
+*.vpp.bak_*
+*.vpp.lck
+*.mcp-tmp

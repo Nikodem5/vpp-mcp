@@ -292,6 +292,27 @@ def vpp_render_diagram(path: str, diagram: str = "", output_png: str = "", scale
         return _err(e)
 
 
+@mcp.tool()
+def vpp_render_sequence(path: str, diagram: str, output_png: str = "", scale: float = 1.0):
+    """Rysuje diagram sekwencji do PNG z geometrii zapisanej w pliku .vpp (linie życia, aktywacje, komunikaty z numerami
+    i sygnaturami, fragmenty loop/alt/opt z warunkami, ref). To nie jest renderer Visual Paradigm, ale pokazuje te same
+    pozycje, więc wystarcza do oceny układu: gdzie leżą fragmenty, czy etykiety się mieszczą, jak szeroki jest diagram.
+    Zwraca opis i obraz. diagram: nazwa diagramu sekwencji; output_png: gdzie zapisać (domyślnie katalog tymczasowy);
+    scale: np. 0.6 dla dużych diagramów. Wymaga Pillow."""
+    try:
+        import tempfile
+        from .render_seq import render_sequence_diagram
+        out = output_png or os.path.join(tempfile.gettempdir(), "vpp_render_seq.png")
+        info = render_sequence_diagram(_check_source(path), diagram, out, scale)
+        try:
+            from mcp.server.fastmcp import Image
+            return [info, Image(path=out)]
+        except Exception:
+            return info
+    except Exception as e:
+        return _err(e)
+
+
 # ------------------------------------------------------------------ write tools
 CHANGE_DOC = """Lista zmian wykonywanych po kolei, wszystkie albo żadna. Każda zmiana to obiekt z polem "op":
 - {"op":"add_class","name":"FabrykaZamowien","kind":"class|abstract class|interface|enumeration",

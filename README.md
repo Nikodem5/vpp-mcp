@@ -30,6 +30,7 @@ Przykładowe polecenia dla Claude'a:
 | `vpp_add_sequence_diagrams` | Całe diagramy sekwencji z opisu: aktorzy, obiekty (także tworzone w trakcie i wywołania statyczne), call, self, create, return, found, sygnał, fragmenty loop/opt/alt, `ref`. Komunikaty są przypięte do metod z diagramu klas. |
 | `vpp_delete_sequence_diagram` | Usuwa diagram sekwencji, np. żeby wygenerować go od nowa. |
 | `vpp_render_diagram` | **Podgląd diagramu klas jako PNG** z geometrii zapisanej w pliku (klasy ze składowymi, stereotypy, linie, romby, liczności, role). To nie jest renderer VP, ale pokazuje te same pozycje, więc pozwala ocenić układ bez otwierania programu. Wymaga Pillow (instaluje się razem z serwerem). |
+| `vpp_render_sequence` | Podgląd diagramu sekwencji jako PNG (linie życia, aktywacje, komunikaty z numeracją, fragmenty loop/alt/opt, ref). |
 | `vpp_verify` | Kontrola struktury pliku. |
 
 ## Bezpieczeństwo

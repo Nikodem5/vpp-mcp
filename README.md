@@ -72,7 +72,7 @@ W aplikacji Claude otwórz **Settings → Developer → Edit Config**. Otworzy s
 
 Jeśli masz już inne serwery, dopisz sam wpis `"visual-paradigm": {...}` obok nich i pilnuj przecinków. Potem **zamknij i uruchom ponownie aplikację Claude**. Serwer pojawi się na liście narzędzi.
 
-Jeśli Claude nie widzi serwera, zamiast `"python"` wpisz pełną ścieżkę do Pythona, np. `"C:\\Users\\TWOJA_NAZWA\\AppData\\Local\\Programs\\Python\\Python312\\python.exe"`. Ścieżkę pokaże polecenie `where python`. Na macOS użyj `python3`.
+Jeśli Claude nie widzi serwera, zamiast `"python"` wpisz pełną ścieżkę do Pythona, np. `"C:\\Users\\TWOJA_NAZWA\\AppData\\Local\\Programs\\Python\\Python312\\python.exe"`. Ścieżkę pokaże polecenie `where python`. Na Linuksie i macOS zobacz sekcję niżej.
 
 ### 2b. Albo dodaj do Claude Code
 
@@ -80,10 +80,75 @@ Jeśli Claude nie widzi serwera, zamiast `"python"` wpisz pełną ścieżkę do 
 claude mcp add visual-paradigm -- python -m vpp_mcp
 ```
 
+### Linux i macOS
+
+Na obu systemach najprościej zainstalować serwer w osobnym wirtualnym środowisku. Systemowy Python (Debian/Ubuntu) i Python z Homebrew blokują `pip install` poza takim środowiskiem (błąd `externally-managed-environment`).
+
+**1. Python 3.10+ i git**
+
+```bash
+# Debian/Ubuntu
+sudo apt install python3 python3-venv python3-pip git
+
+# Fedora
+sudo dnf install python3 git
+
+# macOS (Homebrew, https://brew.sh)
+brew install python git
+```
+
+Wersję sprawdzisz poleceniem `python3 --version`.
+
+**2. Pobierz i zainstaluj serwer**
+
+```bash
+python3 -m venv ~/.vpp-mcp-venv
+~/.vpp-mcp-venv/bin/python -m pip install git+https://github.com/Nikodem5/vpp-mcp
+```
+
+Sprawdzenie, które nie powinno wypisać błędu:
+
+```bash
+~/.vpp-mcp-venv/bin/python -c "import vpp_mcp.server"
+```
+
+**3a. Claude Code**
+
+```bash
+claude mcp add visual-paradigm -- ~/.vpp-mcp-venv/bin/python -m vpp_mcp
+```
+
+**3b. Claude Desktop (macOS)**
+
+Claude Desktop nie ma oficjalnej wersji na Linuksa, tam użyj Claude Code. Na macOS otwórz **Settings → Developer → Edit Config**. Plik to `~/Library/Application Support/Claude/claude_desktop_config.json`. Wpisz pełną ścieżkę do Pythona z środowiska (`~` nie jest tu rozwijane), czyli `/Users/TWOJA_NAZWA/.vpp-mcp-venv/bin/python`:
+
+```json
+{
+  "mcpServers": {
+    "visual-paradigm": {
+      "command": "/Users/TWOJA_NAZWA/.vpp-mcp-venv/bin/python",
+      "args": ["-m", "vpp_mcp"]
+    }
+  }
+}
+```
+
+Potem całkowicie zamknij (Cmd+Q) i uruchom ponownie Claude Desktop.
+
+Ścieżki do plików `.vpp` podajesz w formacie systemowym, np. `/home/ania/projekty/projekt.vpp` albo `/Users/ania/projekty/projekt.vpp`.
+
 ### Aktualizacja
+
+Windows:
 
 ```
 python -m pip install --upgrade --force-reinstall git+https://github.com/Nikodem5/vpp-mcp
+```
+
+Linux i macOS:
+
+```bash
+~/.vpp-mcp-venv/bin/python -m pip install --upgrade --force-reinstall git+https://github.com/Nikodem5/vpp-mcp
 ```
 
 Potem uruchom ponownie aplikację Claude.

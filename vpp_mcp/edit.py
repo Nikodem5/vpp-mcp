@@ -61,7 +61,8 @@ def parse_operation(text: str):
     return {"vis": vis or "+", "name": name, "params": ps, "ret": ret.strip() if ret else None}
 
 
-VIS_CODE = {"+": "71", "-": None}
+VIS_CODE = {"+": "71", "-": None}              # attributes: private = key absent
+VIS_CODE_OP = {"+": "71", "-": "66"}          # operations: private = 66 (confirmed in VP 18.1)
 STRUCTURAL_STEREOTYPES = ("interface", "enumeration")   # produced by kind=interface / enumeration, not set by the user
 
 
@@ -275,7 +276,7 @@ class Editor:
     def _operation_obj(self, op: dict, owner: str, static=False, abstract=False, oid: Optional[str] = None) -> Obj:
         t = self.ts()
         ent: List[Tuple[str, object]] = []
-        code = VIS_CODE.get(op["vis"])
+        code = VIS_CODE_OP.get(op["vis"])
         if code:
             ent.append(("visibility", Raw(code)))
         ent += [("_modelEditable", Raw("T")), ("pmAuthor", string(self.author)), ("lastModifiedTime", Raw(str(t))),

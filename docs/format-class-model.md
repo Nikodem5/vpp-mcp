@@ -154,9 +154,10 @@ Applies to attributes and operations.
 
 | Code | Meaning |
 |---|---|
-| key absent | private (attribute default; renders `-`) |
+| key absent | **attributes:** private (renders `-`). **Operations:** renders `+` (checked in VP 18.1), so an operation needs an explicit code to be private |
 | `71` | public (`+`); what VP writes on new operations |
-| `66`, `67`, `68` | seen in samples; protected and package. Not verified which is which, so avoid them. |
+| `66` | private operation (`-`); confirmed by setting a constructor to private in VP 18.1 |
+| `67`, `68` | seen in samples; protected and package. Not verified which is which, so avoid them. |
 
 On association ends, `visibility=65` always appears; it is the "unspecified" default. Copy it as is.
 

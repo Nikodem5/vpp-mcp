@@ -8,7 +8,8 @@ from typing import Dict, List, Optional
 
 from .notation import Obj, Lst, Raw, At, parse, dump, unquote
 
-VIS = {None: "-", "71": "+"}
+VIS = {None: "-", "71": "+"}                 # attributes: no key = private
+VIS_OP = {None: "+", "71": "+", "66": "-"}   # operations: no key renders "+", 66 = private (confirmed in VP 18.1)
 VIS_NAME = {None: "private", "71": "public"}
 
 
@@ -173,7 +174,7 @@ class Project:
             elif m.type == "Operation":
                 ps = ", ".join(f"{p.name} : {self.type_text(p)}" for p in m.children() if p.type == "Parameter")
                 ctor = not m.has("returnType") and not m.has("returnType_string") and m.name == row.name
-                s = f"{VIS.get(m.text('visibility'), '?')}{m.name}({ps})" + ("" if ctor else f" : {self.type_text(m, 'returnType')}")
+                s = f"{VIS_OP.get(m.text('visibility'), '?')}{m.name}({ps})" + ("" if ctor else f" : {self.type_text(m, 'returnType')}")
                 ops.append({"text": s, "static": static, "abstract": m.text("abstract") == "T", "constructor": ctor})
             elif m.type == "EnumerationLiteral":
                 lits.append(m.name)

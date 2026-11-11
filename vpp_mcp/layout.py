@@ -84,6 +84,7 @@ def cost(boxes: Sequence[Box], edges: Sequence[Tuple[int, int]], margin: float =
     x1 = max(b[0] + b[2] for b in boxes)
     y1 = max(b[1] + b[3] for b in boxes)
     w, h = max(x1 - x0, 1), max(y1 - y0, 1)
+    c += 5000 * sum(1 for b in boxes if b[0] < 20 or b[1] < 20)     # keep everything on the visible canvas
     c += 0.06 * (w + h) + 160 * abs(math.log(w / h / aspect))
     return c
 

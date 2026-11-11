@@ -137,9 +137,13 @@ def render_class_diagram(path: str, diagram: Optional[str], out_png: str, scale:
             if r is not None:
                 st = p.stereotype_names(r.obj)
                 if st:
-                    mid = pts[len(pts) // 2] if len(pts) % 2 else ((pts[len(pts) // 2 - 1][0] + pts[len(pts) // 2][0]) / 2,
-                                                               (pts[len(pts) // 2 - 1][1] + pts[len(pts) // 2][1]) / 2)
-                    notes.append(("<<" + st[0] + ">>", mid, None))
+                    cap = _rect4(s.obj.get("_captionUIModel"))
+                    if cap is not None:                            # caption box: x, y relative to the first point of the line
+                        mid = (pts[0][0] + cap[0] + cap[2] / 2.0, pts[0][1] + cap[1] + cap[3] / 2.0)
+                    else:
+                        mid = pts[len(pts) // 2] if len(pts) % 2 else ((pts[len(pts) // 2 - 1][0] + pts[len(pts) // 2][0]) / 2,
+                                                                       (pts[len(pts) // 2 - 1][1] + pts[len(pts) // 2][1]) / 2)
+                    notes.append(("<<" + st[0] + ">>", mid, "caption"))
         # ---- classes
         for sid, s in classes.items():
             x, y, w, h = boxes[sid]
@@ -172,8 +176,8 @@ def render_class_diagram(path: str, diagram: Optional[str], out_png: str, scale:
         # ---- end labels on top
         for lab, pt, dirv in notes:
             lw = dr.textlength(lab, font=f_reg) / scale
-            if dirv is None:                                       # stereotype caption
-                text(pt[0] - lw / 2, pt[1] - 17, lab, fill=GREY)
+            if dirv == "caption":                                  # stereotype caption: centre of the stored box
+                text(pt[0] - lw / 2, pt[1] - 7, lab, fill=GREY)
             elif dirv == "centre":                                 # label rectangle stored in the file (centre of the text)
                 text(pt[0] - lw / 2, pt[1] - 7, lab, fill=(20, 20, 120))
             else:                                                  # no rectangle: VP-like default guess
@@ -187,6 +191,15 @@ def render_class_diagram(path: str, diagram: Optional[str], out_png: str, scale:
         return f"Diagram {d.name}: {len(classes)} klas, {len(conns)} linii, obraz {W}x{H} px (skala {scale}), obszar x {x0}..{x1}, y {y0}..{y1}. Zapisano: {out_png}"
     finally:
         p.close()
+
+
+def _rect4(cap):
+    """x, y, width, height of a ``_captionUIModel`` list -> tuple or None."""
+    try:
+        d = {i.key: i.value.text for i in cap.items if hasattr(i, "key")}
+        return tuple(int(d[k]) for k in ("x", "y", "width", "height"))
+    except Exception:
+        return None
 
 
 def _rect(v):

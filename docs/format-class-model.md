@@ -673,3 +673,6 @@ All of these are implemented in `verify_vpp.py`.
 - Etykiety końców asocjacji: flagi `hasMultiplicityAShape`, `hasMultiplicityBShape`, `hasRoleBShape` (= `T`) oraz prostokąty
   `multiplicityARectangle`, `multiplicityBRectangle`, `roleBRectangle` = `( x, y, szer, wys )` przesunięte względem końca linii
   (A = źródło, B = cel); tekst jest wyśrodkowany w prostokącie. `roleARectangle` / `hasRoleAShape` są domyślnie założone analogicznie (niepotwierdzone).
+- Podpis linii (`_captionUIModel`, np. «create», «use»): `@x`, `@y` to lewy górny róg pola **względem pierwszego punktu linii**
+  (nie środka). VP ucina napis do `<<c...`, jeśli pole jest za wąskie: szerokość ok. `4.7 * (liczba znaków napisu z << >>) + 31`,
+  wysokość 15 (np. «create» = 78, «use» = 64).

@@ -38,3 +38,11 @@ def test_parallel_edges_get_different_anchors():
     boxes = [(40, 40, 300, 160), (500, 40, 300, 160)]
     r = route_edges(boxes, [(0, 1), (0, 1)])
     assert r[0]["points"][0] != r[1]["points"][0]
+
+
+def test_caption_box_is_relative_to_first_point_and_wide_enough():
+    from vpp_mcp.edit import _cap_w, _caption, _first_point
+    assert _cap_w("create") >= 75 and _cap_w("use") >= 60          # VP cuts a narrower box to "<<c..."
+    cap = _caption((100, 50), 78, 15, p0=(60, 30))
+    assert "@x=1;" in cap and "@y=13;" in cap                       # centre (100, 50): x = 100-39-60 = 1, y = 50-7-30 = 13
+    assert _first_point("12,34;56,78;") == (12, 34)

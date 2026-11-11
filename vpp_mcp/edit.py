@@ -556,24 +556,28 @@ class Editor:
         o.set("connectorStyle", Raw("0"))
         seg = max(zip(rel, rel[1:]), key=lambda ab: abs(ab[0][0] - ab[1][0]) + abs(ab[0][1] - ab[1][1]))
         mid = ((seg[0][0] + seg[1][0]) // 2, (seg[0][1] + seg[1][1]) // 2)
-        cap = o.get("_captionUIModel")
-        if isinstance(cap, Lst):
-            wid = next((int(it.value.text) for it in cap.items if isinstance(it, At) and it.key == "width"), 20)
-            for it in cap.items:
-                if isinstance(it, At) and it.key == "x":
-                    it.value = Raw(str(mid[0] - wid // 2))
-                if isinstance(it, At) and it.key == "y":
-                    it.value = Raw(str(mid[1] - 8))
+        r_model = self.p.me.get(s.model) if s.model else None
+        st = self.p.stereotype_names(r_model.obj) if r_model is not None else []
+        if st:
+            w, h = _cap_w(st[0]), 15
+            cx, cy = mid
+            if seg[0][1] == seg[1][1]:                        # horizontal segment: put the caption just above the line
+                cy -= 14
+            _set_caption(o, (cx, cy), rel[0], w, h)
+        else:
+            _set_caption(o, mid, rel[0])
         if s.model_type == "Association" and s.model in self.p.me:
             r = self.p.me[s.model]
             a, b = r.obj.get("from"), r.obj.get("to")
             if isinstance(a, Obj) and isinstance(b, Obj):
                 ea, eb = self.p._end(a), self.p._end(b)
+                deco = {"A": ea["aggregation"] in ("66", "67") or eb["navigable"] == "2",     # diamond / arrowhead at that end
+                        "B": eb["aggregation"] in ("66", "67") or ea["navigable"] == "2"}
                 for tag, end, pt, nrm in (("A", ea, rel[0], rt["n0"]), ("B", eb, rel[-1], rt["n1"])):
-                    self._place_labels(o, tag, end, pt, nrm)
+                    self._place_labels(o, tag, end, pt, nrm, deco[tag])
         self.dirty_de.add(s.id)
 
-    def _place_labels(self, o: Obj, tag: str, end: dict, pt, nrm):
+    def _place_labels(self, o: Obj, tag: str, end: dict, pt, nrm, deco: bool = False):
         """Multiplicity / role label rectangles (offsets from the line end ``pt``; the text is centred in the rectangle)."""
         items = []
         if end.get("multiplicity"):
@@ -584,9 +588,9 @@ class Editor:
             tw = int(len(txt) * 6.1) + 4
             w, h = max(mw, tw + 10), mh
             if nrm[0] != 0:                                    # line leaves horizontally: multiplicity above, role below
-                cx, cy = nrm[0] * (tw // 2 + 24), (-12 if slot == 0 else 12)
+                cx, cy = nrm[0] * (tw // 2 + (24 if deco else 20)), (-14 if slot == 0 else 12)
             else:                                              # line leaves vertically: multiplicity right, role left
-                cx, cy = ((tw // 2 + 8) if slot == 0 else -(tw // 2 + 8)), nrm[1] * 26
+                cx, cy = ((tw // 2 + 8) if slot == 0 else -(tw // 2 + 8)), nrm[1] * (27 if deco else 17)
             o.set(f"has{kind}{tag}Shape", Raw("T"))
             o.set(f"{kind[0].lower()}{kind[1:]}{tag}Rectangle",
                   Lst([Raw(str(v)) for v in (int(cx - w / 2), int(cy - h / 2), w, h)]))
@@ -849,7 +853,7 @@ class Editor:
                 sa, sb = self.p.shape_of(ia, d.id), self.p.shape_of(ib, d.id)
                 vid = self.new_id()
                 self.add_de(parse(_simple_connector(vid, r.model_type, path, d.id, sa.id, sb.id, self._cgeom(sa, sb),
-                                                    (40, 14) if o.has("stereotypes") else (20, 0))),
+                                                    (_cap_w(self.p.stereotype_names(o)[0]), 15) if o.has("stereotypes") else (20, 0))),
                             r.model_type, d.id, r.id)
             self.append_to_diagram(d.id, vid)
             self.link_view(r, d.id, vid)
@@ -921,7 +925,7 @@ class Editor:
             self._backref(to.id, "ToSimpleRelationships", path)
             fs, ts_ = self.p.shape_of(frm.id, d.id), self.p.shape_of(to.id, d.id)
             self.add_de(parse(_simple_connector(vid, mtype, path, d.id, fs.id, ts_.id, self._cgeom(fs, ts_),
-                                                (40, 14) if stereotype else (20, 0))), mtype, d.id, rid)
+                                                (_cap_w(stereotype), 15) if stereotype else (20, 0))), mtype, d.id, rid)
             self.append_to_diagram(d.id, vid)
             txt = {"Generalization": f"{a.name} --|> {b.name}", "Realization": f"{a.name} ..|> {b.name}"}.get(
                 mtype, f"{a.name} ..> {b.name}" + (f" «{stereotype}»" if stereotype else ""))
@@ -1017,6 +1021,7 @@ class Editor:
             o.set("_points", Raw(f'"{g["points"]}"'))
             for k, v in (("x", g["x"]), ("y", g["y"]), ("width", g["w"]), ("height", g["h"])):
                 o.set(k, Raw(str(v)))
+            _set_caption(o, g["mid"], _first_point(g["points"]))
             self.dirty_de.add(r.id)
 
 
@@ -1064,19 +1069,46 @@ _FONT = "(\n\t\t@name=\"Dialog\";, \n\t\t@color=(\n\t\t\t0, \n\t\t\t0, \n\t\t\t0
 _LINE = "(\n\t\t@cap=0;, \n\t\t@transparency=0;, \n\t\t@weight=1.0;, \n\t\t@color=(\n\t\t\t0, \n\t\t\t0, \n\t\t\t0, \n\t\t\t255\n\t\t);, \n\t\t@hasStroke=T;\n\t)"
 
 
-def _caption(mid, w, h):
+def _cap_w(name: str) -> int:
+    """Width VP gives to a «stereotype» caption (too narrow a box shows ``<<c...``)."""
+    return int(4.7 * (len(name) + 4) + 31)
+
+
+def _caption(mid, w, h, p0=(0, 0)):
+    """Caption box. x, y are the top-left corner relative to the FIRST point of the line (checked against a file edited in VP);
+    ``mid`` is where the centre of the box should be, in the same coordinates as ``p0`` (relative to the from-shape)."""
     return ("(\n\t\t@x=%d;, \n\t\t@y=%d;, \n\t\t@width=%d;, \n\t\t@height=%d;, \n\t\t@side=1;, \n\t\t@visible=T;, "
-            "\n\t\t@internalWidth=-2147483648;, \n\t\t@internalHeight=-2147483648;\n\t)" % (mid[0] - w // 2, mid[1] - 8, w, h))
+            "\n\t\t@internalWidth=-2147483648;, \n\t\t@internalHeight=-2147483648;\n\t)"
+            % (mid[0] - w // 2 - p0[0], mid[1] - h // 2 - p0[1], w, h))
+
+
+def _first_point(points: str):
+    a, b = points.split(";")[0].split(",")
+    return int(a), int(b)
+
+
+def _set_caption(o: Obj, centre, p0, w=None, h=None):
+    cap = o.get("_captionUIModel")
+    if not isinstance(cap, Lst):
+        return
+    cur = {it.key: it for it in cap.items if isinstance(it, At)}
+    if w is not None:
+        cur["width"].value = Raw(str(int(w)))
+    if h is not None:
+        cur["height"].value = Raw(str(int(h)))
+    cw, ch = int(cur["width"].value.text), int(cur["height"].value.text)
+    cur["x"].value = Raw(str(int(centre[0] - cw // 2 - p0[0])))
+    cur["y"].value = Raw(str(int(centre[1] - ch // 2 - p0[1])))
 
 
 def _simple_connector(vid, shape_type, meta_path, diagram, fs, tsh, g, cap):
     return ("%s:NULL:%s {\n\tbackground=%s;\n\twidth=%d;\n\ttoPinType=1;\n\tuseToShapeCenter=T;\n\t_captionUIModel=%s;\n\t_toShape=<%s:%s>;\n\t_elementFont=%s;\n\t_points=\"%s\";\n\tmetaModelElement=<%s>;\n\tfromPinType=1;\n\tforeground=%s;\n\ty=%d;\n\t_fromShape=<%s:%s>;\n\tx=%d;\n\tcreatorDiagramType=\"ClassDiagram\";\n\t_lineModel=%s;\n\theight=%d;\n\tuseFromShapeCenter=T;\n}"
-            % (vid, shape_type, _BG, g["w"], _caption(g["mid"], *cap), diagram, tsh, _FONT, g["points"], meta_path, _COLOR, g["y"], diagram, fs, g["x"], _LINE, g["h"]))
+            % (vid, shape_type, _BG, g["w"], _caption(g["mid"], *cap, _first_point(g["points"])), diagram, tsh, _FONT, g["points"], meta_path, _COLOR, g["y"], diagram, fs, g["x"], _LINE, g["h"]))
 
 
 def _assoc_connector(vid, meta_path, diagram, fs, tsh, g):
     return ("%s:NULL:Association {\n\tforeground=%s;\n\tfromPinType=1;\n\t_points=\"%s\";\n\tshowUniqueMultiplicityConstraint=T;\n\tshowStereotypes=T;\n\ttoPinType=1;\n\tshowToRoleName=T;\n\tuseToShapeCenter=T;\n\tshowFromRoleVisibility=T;\n\tcreatorDiagramType=\"ClassDiagram\";\n\t_fromShape=<%s:%s>;\n\tshowOrderedMultiplicityConstraint=T;\n\tuseFromShapeCenter=T;\n\ty=%d;\n\tx=%d;\n\tmetaModelElement=<%s>;\n\tshowToRoleVisibility=T;\n\tshowToMultiplicity=T;\n\tshowFromRoleName=T;\n\t0SwDr=F;\n\theight=%d;\n\twidth=%d;\n\tbackground=%s;\n\t_elementFont=%s;\n\t_captionUIModel=%s;\n\t_toShape=<%s:%s>;\n\t_lineModel=%s;\n\tshowFromMultiplicity=T;\n\tshowMultiplicityConstraints=F;\n}"
-            % (vid, _COLOR, g["points"], diagram, fs, g["y"], g["x"], meta_path, g["h"], g["w"], _BG, _FONT, _caption(g["mid"], 20, 0), diagram, tsh, _LINE))
+            % (vid, _COLOR, g["points"], diagram, fs, g["y"], g["x"], meta_path, g["h"], g["w"], _BG, _FONT, _caption(g["mid"], 20, 0, _first_point(g["points"])), diagram, tsh, _LINE))
 
 
 # copied from a VP 2026 class shape (TypRabatu), used only when a diagram has no class shape to clone

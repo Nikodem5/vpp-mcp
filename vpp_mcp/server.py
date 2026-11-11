@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from .edit import Editor
+from .patterns import PATTERNS, apply_pattern, describe_patterns
 from .project import Project, VppError, is_open_in_vp, lock_path
 from .sequence import build_sequence_diagrams, delete_sequence_diagram, describe_sequence_diagram
 from .verify import verify
@@ -127,6 +128,8 @@ def vpp_list_classes(path: str, with_members: bool = False) -> str:
             out = []
             for r in sorted(p.classifiers(), key=lambda r: (p.kind_of(r), r.name)):
                 item = {"name": r.name, "kind": p.kind_of(r)}
+                if p.user_stereotypes(r):
+                    item["stereotypes"] = p.user_stereotypes(r)
                 if with_members:
                     m = p.member_lines(r)
                     item["attributes"] = [a["text"] + (" {static}" if a["static"] else "") for a in m["attributes"]]
@@ -157,7 +160,8 @@ def vpp_get_class(path: str, name: str) -> str:
                 if sh:
                     x, y, w, h = p.geometry(sh)
                     shapes.append({"diagram": d.name, "x": x, "y": y, "width": w, "height": h})
-            return _json({"name": r.name, "kind": p.kind_of(r), **m, "relationships": rels, "shapes": shapes})
+            return _json({"name": r.name, "kind": p.kind_of(r), "stereotypes": p.user_stereotypes(r), **m,
+                          "relationships": rels, "shapes": shapes})
         finally:
             p.close()
     except Exception as e:
@@ -198,19 +202,26 @@ def vpp_get_sequence_diagram(path: str, name: str) -> str:
 
 
 @mcp.tool()
-def vpp_export_plantuml(path: str, classes: Optional[List[str]] = None, with_members: bool = True) -> str:
+def vpp_export_plantuml(path: str, classes: Optional[List[str]] = None, with_members: bool = True,
+                        diagram: Optional[str] = None) -> str:
     """Eksport (fragmentu) diagramu klas do PlantUML, np. do studium wzorca: fragment 'przed' i 'po' zmianie.
-    classes = lista nazw klas (domyślnie wszystkie); relacje tylko między wybranymi klasami."""
+    classes = lista nazw klas (domyślnie wszystkie); relacje tylko między wybranymi klasami.
+    diagram = nazwa diagramu klas: eksportuje klasy z tego diagramu (np. z diagramu-fragmentu wzorca)."""
     try:
         p = Project(_check_source(path))
         try:
-            rows = [p.find_class(c) for c in classes] if classes else p.classifiers()
+            if diagram:
+                d = p.find_diagram(diagram, "ClassDiagram")
+                rows = [p.me[s.model] for s in p.shapes_on(d.id) if s.model_type == "Class" and s.parent is None]
+            else:
+                rows = [p.find_class(c) for c in classes] if classes else p.classifiers()
             names = {r.name for r in rows}
             L = ["@startuml", "skinparam style strictuml", "skinparam classAttributeIconSize 0", "hide empty members"]
             for r in rows:
                 k = p.kind_of(r)
                 head = {"interface": "interface", "enumeration": "enum", "abstract class": "abstract class"}.get(k, "class")
-                L.append(f'{head} "{r.name}" as {_puml_id(r.name)} {{')
+                st = "".join(f" <<{s}>>" for s in p.user_stereotypes(r))
+                L.append(f'{head} "{r.name}" as {_puml_id(r.name)}{st} {{')
                 if with_members:
                     m = p.member_lines(r)
                     for a in m["attributes"]:
@@ -263,7 +274,10 @@ def vpp_verify(path: str) -> str:
 CHANGE_DOC = """Lista zmian wykonywanych po kolei, wszystkie albo żadna. Każda zmiana to obiekt z polem "op":
 - {"op":"add_class","name":"FabrykaZamowien","kind":"class|abstract class|interface|enumeration",
    "attributes":["-licznik : int"], "operations":["+utworz(klient : Klient) : Zamowienie"], "literals":["A","B"],
-   "static_members":["licznik"], "abstract_operations":["utworz"], "x":100, "y":200, "diagram":"<nazwa diagramu klas>"}
+   "static_members":["licznik"], "abstract_operations":["utworz"], "stereotypes":["Builder"],
+   "x":100, "y":200, "near":"Zamowienie", "diagram":"<nazwa diagramu klas>"}
+   (bez x, y klasa trafia obok klasy z pola near albo, gdy go nie ma, w wolne miejsce pod diagramem)
+- {"op":"set_stereotype","class":"DyspozytorDostaw","stereotypes":["Singleton"]}  (pusta lista usuwa stereotypy użytkownika)
 - {"op":"add_attribute","class":"Klient","text":"-email : String [0..1]","static":false}
 - {"op":"add_operation","class":"Klient","text":"+zaloguj(email : String, haslo : String) : boolean","static":false,"abstract":false}
 - {"op":"change_operation","class":"Menu","name":"dodajDanie","text":"+dodajDanie(nazwa : String, cena : double) : Danie"}
@@ -280,16 +294,54 @@ CHANGE_DOC = """Lista zmian wykonywanych po kolei, wszystkie albo żadna. Każda
 - {"op":"remove_relationship","id":"<id z vpp_list_relationships>"}
 - {"op":"move_class","class":"Koszyk","x":400,"y":120}  (przelicza linie relacji tej klasy)
 - {"op":"fit_class","class":"Koszyk"}  (dopasowuje rozmiar pudełka do treści)
+- {"op":"add_class_diagram","name":"Singleton: po zmianach"}  (nowy, pusty diagram klas, np. fragment do studium wzorca)
+- {"op":"add_to_diagram","diagram":"Singleton: po zmianach","classes":["DyspozytorDostaw","Kurier"],
+   "relationships":true,"positions":{"Kurier":[400,40]},"columns":3}
+   (rysuje ISTNIEJĄCE klasy na tym diagramie jako drugi widok tego samego elementu modelu i, przy relationships=true,
+   wszystkie relacje modelu między narysowanymi klasami; bez positions klasy układają się w siatkę)
 Typy: int, double, boolean, void, char, long, float, byte, short, nazwy klas z projektu, dowolny tekst (String, LocalDateTime),
-generyki np. List<Danie>. Widoczność: + publiczna, - prywatna."""
+generyki np. List<Danie>. Widoczność: + publiczna, - prywatna.
+Gdy projekt ma kilka diagramów klas, zmiany bez pola diagram trafiają na ten z największą liczbą klas (główny)."""
+
+# op -> (required fields, optional fields). Unknown fields are an error instead of being silently ignored.
+OPS = {
+    "add_class": ({"name"}, {"kind", "attributes", "operations", "literals", "static_members", "abstract_operations",
+                             "diagram", "x", "y", "stereotypes", "near"}),
+    "set_stereotype": ({"class"}, {"stereotypes"}),
+    "add_attribute": ({"class", "text"}, {"static"}),
+    "add_operation": ({"class", "text"}, {"static", "abstract"}),
+    "change_operation": ({"class", "name", "text"}, {"static", "abstract"}),
+    "change_attribute": ({"class", "name", "text"}, {"static"}),
+    "remove_member": ({"class", "name"}, set()),
+    "add_literal": ({"class", "literal"}, set()),
+    "add_relationship": ({"kind", "source", "target"}, {"source_multiplicity", "source_role", "target_multiplicity",
+                                                        "target_role", "stereotype", "diagram"}),
+    "remove_relationship": ({"id"}, set()),
+    "move_class": ({"class", "x", "y"}, {"diagram"}),
+    "fit_class": ({"class"}, {"diagram"}),
+    "add_class_diagram": ({"name"}, {"like"}),
+    "add_to_diagram": ({"diagram", "classes"}, {"relationships", "positions", "columns"}),
+}
 
 
 def _apply(ed: Editor, ch: Dict[str, Any]) -> str:
     op = ch.get("op")
     g = ch.get
+    if op not in OPS:
+        raise VppError(f"Nieznana operacja {op!r}. Dostępne: {', '.join(OPS)}.")
+    req, opt = OPS[op]
+    unknown = set(ch) - {"op"} - req - opt
+    if unknown:
+        raise VppError(f"operacja {op}: nieznane pola {sorted(unknown)}. Dozwolone: {sorted(req | opt)}.")
+    missing = [k for k in req if ch.get(k) is None]
+    if missing:
+        raise VppError(f"operacja {op}: brakuje pól {sorted(missing)}.")
     if op == "add_class":
         return ed.add_class(g("name"), g("kind", "class"), g("attributes"), g("operations"), g("literals"),
-                            g("static_members"), g("abstract_operations"), g("diagram"), g("x"), g("y"))
+                            g("static_members"), g("abstract_operations"), g("diagram"), g("x"), g("y"),
+                            g("stereotypes"), g("near"))
+    if op == "set_stereotype":
+        return ed.set_stereotype(g("class"), g("stereotypes"))
     if op == "add_attribute":
         return ed.add_attribute(g("class"), g("text"), bool(g("static", False)))
     if op == "add_operation":
@@ -311,6 +363,10 @@ def _apply(ed: Editor, ch: Dict[str, Any]) -> str:
         return ed.move_class(g("class"), int(g("x")), int(g("y")), g("diagram"))
     if op == "fit_class":
         return ed.fit_class(g("class"), g("diagram"))
+    if op == "add_class_diagram":
+        return ed.add_class_diagram(g("name"), g("like"))
+    if op == "add_to_diagram":
+        return ed.add_to_diagram(g("diagram"), g("classes"), bool(g("relationships", True)), g("positions"), g("columns"))
     raise VppError(f"Nieznana operacja {op!r}.")
 
 
@@ -378,6 +434,30 @@ def vpp_delete_sequence_diagram(source_path: str, output_path: str, name: str, o
     Odmówi, jeśli inny diagram odwołuje się do niego przez ref."""
     try:
         return _write(source_path, output_path, overwrite_output, lambda ed: [delete_sequence_diagram(ed, name)])
+    except Exception as e:
+        return _err(e)
+
+
+PATTERN_DOC = "Wzorce kreacyjne jako gotowe zmiany modelu klas (wynik do NOWEGO pliku, oryginał bez zmian).\n" + "\n".join(
+    f"- {k}: {v[2]}" for k, v in PATTERNS.items()) + """
+Wspólne parametry (params): "diagram" (na którym diagramie rysować nowe klasy; domyślnie główny), "positions" ({"Klasa":[x,y]}),
+"stereotypes" (true: role wzorca jako stereotypy klas, domyślnie true), "language" ("pl"/"en", nazwy ról),
+"fragment_diagram" (nazwa nowego diagramu klas z samym wzorcem, do studium) i "fragment_context" (dodatkowe klasy na tym diagramie).
+Wynik zawiera listę zmian i mapę ról. Żeby pokazać stan 'przed', zrób fragment_diagram w KOPII pliku sprzed wzorca
+(diagram jest widokiem modelu, więc w jednym pliku nie da się zachować 'przed' obok 'po')."""
+
+
+@mcp.tool()
+def vpp_list_patterns() -> str:
+    """Wzorce, które potrafi zastosować vpp_apply_pattern, z opisem i parametrami."""
+    return _json(describe_patterns())
+
+
+@mcp.tool(description=PATTERN_DOC)
+def vpp_apply_pattern(source_path: str, output_path: str, pattern: str, params: Dict[str, Any],
+                      overwrite_output: bool = False) -> str:
+    try:
+        return _write(source_path, output_path, overwrite_output, lambda ed: apply_pattern(ed, pattern, params))
     except Exception as e:
         return _err(e)
 

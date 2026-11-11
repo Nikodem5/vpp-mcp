@@ -652,3 +652,12 @@ All of these are implemented in `verify_vpp.py`.
 | `simple_rel(kind, fromID, toID, stereotypeID)` | One call creates the row, connector, container entry and back-references. |
 | `end(side, classID, mult, role, aggregation, navigable)` | AssociationEnd block. |
 | `replace_once(s, old, new, what)` | Safe edit of existing text; aborts unless there is exactly one match. |
+
+## 13. Stereotypes, additional class diagrams, extra views (added in vpp-mcp 0.2.0)
+
+*Written from the implementation in `vpp_mcp/edit.py` (`set_stereotype`, `add_class_diagram`, `add_to_diagram`); the results were checked with the structural verifier and opened in Visual Paradigm Community Edition 18.1.*
+
+- **User stereotypes** are `Stereotype` model elements referenced from the `stereotypes=(<id>, ...)` list of a class. The structural ones (`Interface`, `enumeration`) live in the same list and must be preserved when the user stereotypes change. The list is removed when empty. Every class shape on every diagram is made taller by 15 px per added stereotype, and the shape's caption height is `15 + 15 * n`. Widths grow to fit the `«Name»` text.
+- **A new class diagram** is a copy of the `DIAGRAM` definition of an existing class diagram with a new id and name, empty `Child` list and fresh `diagramPreviewData_id`, timestamps and `pmAuthor`. It is appended to the project's diagram roots (`append_diagram_root`).
+- **An existing class on another diagram** is a second `DIAGRAM_ELEMENT` (view) of the same model element: a new view id, added to the model element's `_modelViews` and to the diagram's `Child` list. The element's `_masterViewId` is not changed. Relationships between two classes that are both drawn on the diagram get their own connector shapes (`_fromShape`/`_toShape`, `_points`) and the matching `_modelViews` entries.
+- **A diagram is only a view of the model.** A "before" and an "after" state of a class cannot coexist in one project; keep the "before" state in a separate copy of the file.

@@ -62,6 +62,13 @@ def parse_operation(text: str):
 
 
 VIS_CODE = {"+": "71", "-": None}
+STRUCTURAL_STEREOTYPES = ("interface", "enumeration")   # produced by kind=interface / enumeration, not set by the user
+
+
+def _as_list(v) -> List[str]:
+    if v is None:
+        return []
+    return [v] if isinstance(v, str) else [str(x) for x in v]
 
 
 class Editor:
@@ -459,24 +466,53 @@ class Editor:
         self._reroute(d.id, sh.id)
         return f"{cls.name}: przesunięta na ({x}, {y}). Linie relacji przeliczone." + self._overlap_warning(d.id, sh.id)
 
+    def _class_shapes(self, diagram: str) -> List[Row]:
+        return [r for r in self.p.shapes_on(diagram) if r.model_type == "Class" and r.parent is None]
+
     def _default_class_diagram(self) -> Row:
+        """The only class diagram, or the main one (most class shapes) when there are fragment diagrams too."""
         ds = self.p.class_diagrams()
         if not ds:
             raise VppError("W projekcie nie ma diagramu klas.")
-        if len(ds) > 1:
-            raise VppError("W projekcie jest kilka diagramów klas, podaj nazwę: " + ", ".join(d.name for d in ds))
-        return ds[0]
+        if len(ds) == 1:
+            return ds[0]
+        counts = {d.id: len(self._class_shapes(d.id)) for d in ds}
+        best = max(counts.values())
+        top = [d for d in ds if counts[d.id] == best]
+        if len(top) > 1:
+            raise VppError("W projekcie jest kilka równorzędnych diagramów klas, podaj nazwę (pole diagram): "
+                           + ", ".join(d.name for d in ds))
+        return top[0]
 
     def _template_class_shape(self, diagram: str) -> Obj:
-        for r in self.p.shapes_on(diagram):
-            if r.model_type == "Class" and r.parent is None:
+        for r in self._class_shapes(diagram):
+            return parse(dump(r.obj))
+        for d in self.p.class_diagrams():            # an empty diagram: borrow the style of any other class diagram
+            for r in self._class_shapes(d.id):
                 return parse(dump(r.obj))
         return parse(_CLASS_SHAPE_TEMPLATE)
 
-    def _free_spot(self, diagram: str, w: int, h: int) -> Tuple[int, int]:
-        boxes = [self.p.geometry(r) for r in self.p.shapes_on(diagram) if r.parent is None and r.model_type == "Class"]
+    def _free_spot(self, diagram: str, w: int, h: int, near: Optional[Row] = None) -> Tuple[int, int]:
+        """A position for a new w x h shape: next to the ``near`` shape when given, else below everything."""
+        boxes = [self.p.geometry(r) for r in self._class_shapes(diagram)]
         if not boxes:
             return 40, 40
+        m = 30
+
+        def free(x, y):
+            return x >= 0 and y >= 0 and all(not (x - m < a + c and a < x + w + m and y - m < b + d and b < y + h + m)
+                                              for a, b, c, d in boxes)
+        if near is not None:
+            nx, ny, nw, nh = self.p.geometry(near)
+            for dist in range(60, 1000, 40):
+                cands = [(nx + nw + dist, ny + dy) for dy in range(0, 321, 40)]
+                cands += [(nx + nw + dist, ny - dy) for dy in range(40, 321, 40)]
+                cands += [(nx + dx, ny + nh + dist) for dx in range(0, 481, 40)]
+                cands += [(nx - w - dist, ny + dy) for dy in range(0, 321, 40)]
+                cands += [(nx + dx, ny - h - dist) for dx in range(0, 481, 40)]
+                for cx, cy in cands:
+                    if free(cx, cy):
+                        return cx, cy
         maxy = max(b[1] + b[3] for b in boxes)
         return 40, maxy + 60
 
@@ -490,22 +526,64 @@ class Editor:
         self.append_root(sid)
         return sid
 
+    # ------------------------------------------------------------ stereotypes
+    def _stereo_refs(self, kind: str, names: Optional[List[str]]) -> List[Raw]:
+        refs = []
+        if kind == "interface":
+            refs.append(ref(self._stereotype("Interface", "Class")))
+        if kind in ("enumeration", "enum"):
+            refs.append(ref(self._stereotype("enumeration", "Class")))
+        for n in _as_list(names):
+            refs.append(ref(self._stereotype(n, "Class")))
+        return refs
+
+    def set_stereotype(self, cls_name: str, stereotypes=None) -> str:
+        """Set the user stereotypes of a class (e.g. «Singleton»). The structural ones (Interface, enumeration)
+        are kept. ``None`` or an empty list removes the user stereotypes. Shapes on every diagram are resized."""
+        cls = self.p.find_class(cls_name)
+        names = _as_list(stereotypes)
+        before = len(self.p.stereotype_names(cls.obj))
+        keep = [r for r in cls.obj.refs("stereotypes")
+                if (self.p.me[r.split(":")[-1]].name or "").lower() in STRUCTURAL_STEREOTYPES]
+        new = [ref(r) for r in keep] + [ref(self._stereotype(n, "Class")) for n in names]
+        if new:
+            if cls.obj.has("stereotypes"):
+                cls.obj.set("stereotypes", Lst(new))
+            else:
+                cls.obj.entries.insert(0, ("stereotypes", Lst(new)))
+        else:
+            cls.obj.remove("stereotypes")
+        self.touch(cls)
+        delta = len(new) - before
+        for d in self.p.class_diagrams():
+            sh = self.p.shape_of(cls.id, d.id)
+            if sh:
+                x, y, w, h = self.p.geometry(sh)
+                w2 = max([w] + [_text_width("«" + n + "»") for n in names])
+                self._set_geom(sh, w=w2, h=max(40, h + 15 * delta))
+                self._set_caption_height(sh, 15 + 15 * len(new))
+        shown = ", ".join("«" + n + "»" for n in names)
+        return f"{cls.name}: stereotyp {shown}" if names else f"{cls.name}: usunięto stereotypy"
+
     def add_class(self, name: str, kind: str = "class", attributes: Optional[List[str]] = None,
                   operations: Optional[List[str]] = None, literals: Optional[List[str]] = None,
                   static_members: Optional[List[str]] = None, abstract_operations: Optional[List[str]] = None,
-                  diagram: Optional[str] = None, x: Optional[int] = None, y: Optional[int] = None) -> str:
+                  diagram: Optional[str] = None, x: Optional[int] = None, y: Optional[int] = None,
+                  stereotypes=None, near: Optional[str] = None) -> str:
         kind = kind.lower().strip()
         if kind not in ("class", "abstract class", "abstract", "interface", "enumeration", "enum"):
             raise VppError("kind musi być jednym z: class, abstract class, interface, enumeration")
         if any(r.name == name for r in self.p.classifiers()):
             raise VppError(f"Klasa {name} już istnieje.")
         d = self.p.find_diagram(diagram, "ClassDiagram") if diagram else self._default_class_diagram()
+        near_shape = None
+        if near and (x is None or y is None):
+            near_shape = self.p.shape_of(self.p.find_class(near).id, d.id)
         cid, vid = self.new_id(), self.new_id()
         ent: List[Tuple[str, object]] = []
-        if kind == "interface":
-            ent.append(("stereotypes", Lst([ref(self._stereotype("Interface", "Class"))])))
-        if kind in ("enumeration", "enum"):
-            ent.append(("stereotypes", Lst([ref(self._stereotype("enumeration", "Class"))])))
+        srefs = self._stereo_refs(kind, stereotypes)
+        if srefs:
+            ent.append(("stereotypes", Lst(srefs)))
         if kind in ("abstract", "abstract class"):
             ent.append(("abstract", Raw("T")))
         t = self.ts()
@@ -531,8 +609,9 @@ class Editor:
             row.obj.set("Child", Lst(kids), before="pmLastModified")
         # shape
         w, h = self._size_for(row)
+        w = max([w] + [_text_width("«" + n + "»") for n in _as_list(stereotypes)])
         if x is None or y is None:
-            x, y = self._free_spot(d.id, w, h)
+            x, y = self._free_spot(d.id, w, h, near_shape)
         sh = self._template_class_shape(d.id)
         sh.id = vid
         sh.name, sh.name_raw = name, None
@@ -540,11 +619,117 @@ class Editor:
         self.add_de(sh, "Class", d.id, cid)
         self._set_geom(self.p.de[vid], x=x, y=y, w=w, h=h)
         # header = name (15 px) + one line per stereotype; a too-short caption hides the class name in VP
-        self._set_caption_height(self.p.de[vid], 30 if kind in ("interface", "enumeration", "enum") else 15)
+        self._set_caption_height(self.p.de[vid], 15 + 15 * len(srefs))
         self.append_to_diagram(d.id, vid)
         warn = self._overlap_warning(d.id, vid)
         k = {"abstract": "abstract class", "enum": "enumeration"}.get(kind, kind)
         return f"Dodano {k} {name} na diagramie {d.name} w ({x}, {y}), rozmiar {w}x{h}, składowych: {len(kids)}" + warn
+
+    # ------------------------------------------------------------ class diagrams
+    def add_class_diagram(self, name: str, like: Optional[str] = None) -> str:
+        """A new, empty class diagram (a copy of the options of ``like`` or of the main class diagram)."""
+        if any(d.name == name for d in self.p.dg.values()):
+            raise VppError(f"Diagram {name!r} już istnieje.")
+        src = self.p.find_diagram(like, "ClassDiagram") if like else self._default_class_diagram()
+        did = self.new_id()
+        t = self.ts()
+        o = parse(dump(src.obj))
+        o.id, o.name, o.name_raw = did, name, None
+        for k, v in (("pmCreateDateTime", Raw(f'"{t}"')), ("pmLastModified", Raw(f'"{t}"')),
+                     ("creationTime", Raw(str(t))), ("lastModified", Raw(str(t))),
+                     ("diagramPreviewData_id", string(self.new_id())), ("zoomRatio", Raw("1.0")),
+                     ("Child", Raw("NULL")), ("customizedSortDiagramElementIds", Raw("NULL")),
+                     ("hiddenDiagramElementIds", Raw("NULL"))):
+            if o.has(k) or k in ("Child", "zoomRatio"):
+                o.set(k, v)
+        o.set("pmAuthor", string(self.author))
+        self.p.dg[did] = Row("DIAGRAM", did, o, "ClassDiagram", None, name)
+        self.dirty_dg.add(did)
+        self.append_diagram_root(did)
+        return f"Dodano pusty diagram klas {name!r}."
+
+    def add_to_diagram(self, diagram: str, classes: List[str], relationships: bool = True,
+                       positions: Optional[Dict[str, List[int]]] = None, columns: Optional[int] = None) -> str:
+        """Draw EXISTING classes on a class diagram (a second view of the same model element) and, when
+        ``relationships`` is true, every relationship of the model whose two ends are drawn there."""
+        d = self.p.find_diagram(diagram, "ClassDiagram")
+        positions = positions or {}
+        rows = [self.p.find_class(c) for c in classes]
+        gap_x, gap_y, max_w = 70, 100, 1500
+        shapes = self._class_shapes(d.id)
+        cy = (max(self.p.geometry(s)[1] + self.p.geometry(s)[3] for s in shapes) + gap_y) if shapes else 40
+        cx, rowh, col = 40, 0, 0
+        added = []
+        for cls in rows:
+            if self.p.shape_of(cls.id, d.id):
+                continue
+            w, h = self._size_for(cls)
+            if cls.name in positions:
+                x, y = positions[cls.name]
+            else:
+                if col and ((columns and col >= columns) or (not columns and cx + w > max_w)):
+                    cx, cy, rowh, col = 40, cy + rowh + gap_y, 0, 0
+                x, y = cx, cy
+                cx += w + gap_x
+                rowh = max(rowh, h)
+                col += 1
+            vid = self.new_id()
+            sh = self._template_class_shape(d.id)
+            sh.id = vid
+            sh.name, sh.name_raw = cls.name, None
+            sh.set("metaModelElement", ref(cls.id))
+            self.add_de(sh, "Class", d.id, cls.id)
+            self._set_geom(self.p.de[vid], x=x, y=y, w=w, h=h)
+            self._set_caption_height(self.p.de[vid], 15 + 15 * len(self.p.stereotype_names(cls.obj)))
+            self.append_to_diagram(d.id, vid)
+            self.link_view(cls, d.id, vid)
+            added.append(cls.name)
+        nrel = 0
+        if relationships:
+            nrel = self._draw_relationships(d)
+        return (f"Diagram {d.name}: dodano klasy {', '.join(added) or '(żadnej nowej)'}"
+                + (f"; relacje na diagramie: {nrel}" if relationships else ""))
+
+    def _draw_relationships(self, d: Row) -> int:
+        """Connectors for model relationships whose both ends are drawn on ``d`` and that have none there yet."""
+        drawn = {s.model for s in self._class_shapes(d.id)}
+        have = {s.model for s in self.p.shapes_on(d.id) if s.model}
+        n = 0
+        for r in list(self.p.me.values()):
+            if r.id in have or r.model_type not in ("Generalization", "Realization", "Usage", "Association") or not r.parent:
+                continue
+            root = self.p.me[r.parent].parent
+            if not root:
+                continue
+            path = f"{root}:{r.parent}:{r.id}"
+            o = r.obj
+            if r.model_type == "Association":
+                a, b = o.get("from"), o.get("to")
+                if not (isinstance(a, Obj) and isinstance(b, Obj)):
+                    continue
+                ia, ib = self.p._end_cls(a), self.p._end_cls(b)
+                if ia not in drawn or ib not in drawn or ia == ib:
+                    continue
+                sa, sb = self.p.shape_of(ia, d.id), self.p.shape_of(ib, d.id)
+                vid = self.new_id()
+                self.add_de(parse(_assoc_connector(vid, path, d.id, sa.id, sb.id, self._cgeom(sa, sb))),
+                            "Association", d.id, r.id)
+            else:
+                f, t = o.get("fromModel"), o.get("toModel")
+                if not (isinstance(f, Raw) and isinstance(t, Raw)):
+                    continue
+                ia, ib = f.text.strip("<>"), t.text.strip("<>")
+                if ia not in drawn or ib not in drawn:
+                    continue
+                sa, sb = self.p.shape_of(ia, d.id), self.p.shape_of(ib, d.id)
+                vid = self.new_id()
+                self.add_de(parse(_simple_connector(vid, r.model_type, path, d.id, sa.id, sb.id, self._cgeom(sa, sb),
+                                                    (40, 14) if o.has("stereotypes") else (20, 0))),
+                            r.model_type, d.id, r.id)
+            self.append_to_diagram(d.id, vid)
+            self.link_view(r, d.id, vid)
+            n += 1
+        return n
 
     # ------------------------------------------------------------ relationships
     def _rel_container(self, kind: str) -> str:

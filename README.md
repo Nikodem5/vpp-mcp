@@ -13,7 +13,8 @@ Powstał przy przedmiocie *Wzorce projektowe* (AGH), gdzie wszystkie diagramy ro
 Przykładowe polecenia dla Claude'a:
 
 - „Pokaż, jakie klasy i relacje są w `C:\...\projekt.vpp`.”
-- „Dodaj do diagramu klas wzorzec Singleton dla klasy `KatalogRestauracji` i zapisz jako `projekt-singleton.vpp`.”
+- „Zastosuj wzorzec Singleton do klasy `DyspozytorDostaw` i zapisz jako `projekt-singleton.vpp`.”
+- „Dodaj Budowniczego dla `Zamowienie` i zrób diagram ‚fragment po zmianach’.”
 - „Zrób diagram sekwencji dla przypadku użycia *Złóż zamówienie* na podstawie metod z diagramu klas.”
 - „Wyeksportuj klasy `Zamowienie`, `Platnosc` i `BramkaPlatnosci` do PlantUML, potrzebuję fragmentu do studium.”
 
@@ -24,7 +25,8 @@ Przykładowe polecenia dla Claude'a:
 | `vpp_list_relationships` | Generalizacje, realizacje, zależności i asocjacje z licznościami i rolami. |
 | `vpp_get_sequence_diagram` | Uczestnicy, komunikaty z numerami jak w VP (1, 1.1, …), fragmenty loop/alt/opt z warunkami. |
 | `vpp_export_plantuml` | Fragment diagramu klas jako PlantUML. |
-| `vpp_edit_class_model` | Partia zmian w diagramie klas: nowe klasy, interfejsy, enumeracje i klasy abstrakcyjne (z kształtem na diagramie), atrybuty i metody (także `static`, `abstract`, `List<...>`), zmiana i usuwanie składowych, wartości enumeracji, relacje każdego rodzaju, usuwanie relacji, przesuwanie i dopasowanie rozmiaru klas. |
+| `vpp_edit_class_model` | Partia zmian w diagramie klas: nowe klasy, interfejsy, enumeracje i klasy abstrakcyjne (z kształtem na diagramie), atrybuty i metody (także `static`, `abstract`, `List<...>`), zmiana i usuwanie składowych, wartości enumeracji, **stereotypy** (`set_stereotype`, np. «Singleton»), relacje każdego rodzaju, usuwanie relacji, przesuwanie i dopasowanie rozmiaru klas, **nowe diagramy klas** (`add_class_diagram`) i **dorysowanie istniejących klas z relacjami na wybranym diagramie** (`add_to_diagram`). Nieznane pola i operacje kończą się błędem, a nie są po cichu pomijane. |
+| `vpp_list_patterns`, `vpp_apply_pattern` | **Wzorce kreacyjne:** Singleton, Budowniczy (Builder), Metoda wytwórcza, Fabryka abstrakcyjna, Prototyp. Wzorzec jest nakładany na istniejące klasy: dodaje role (klasy, interfejsy, stereotypy), składowe i relacje, a opcjonalnie rysuje diagram „fragment po zmianach”. Wynik to opis ról we wzorcu i lista zmian. |
 | `vpp_add_sequence_diagrams` | Całe diagramy sekwencji z opisu: aktorzy, obiekty (także tworzone w trakcie i wywołania statyczne), call, self, create, return, found, sygnał, fragmenty loop/opt/alt, `ref`. Komunikaty są przypięte do metod z diagramu klas. |
 | `vpp_delete_sequence_diagram` | Usuwa diagram sekwencji, np. żeby wygenerować go od nowa. |
 | `vpp_verify` | Kontrola struktury pliku. |
@@ -98,8 +100,28 @@ Komunikaty na diagramach sekwencji muszą wskazywać metody, które istnieją w 
 - Obsługiwana jest widoczność `+` (publiczna) i `-` (prywatna). Kody VP dla `#` i `~` nie zostały potwierdzone.
 - Aktorzy na diagramach sekwencji są osobnymi elementami o tych samych nazwach co na diagramie przypadków użycia. Tak samo wygląda to w przykładowych projektach VP.
 - Brak edycji diagramów przypadków użycia, czynności i stanów. Serwer je tylko wymienia.
-- Projekt z kilkoma diagramami klas wymaga podania nazwy diagramu przy dodawaniu klas i relacji.
+- Projekt z kilkoma diagramami klas: domyślnie edytowany jest główny diagram (jedyny albo ten z największą liczbą klas; przy remisie serwer prosi o nazwę). Inny wskazuje się parametrem `diagram`.
+- **Diagram to tylko widok modelu**, więc „przed” i „po” nie mogą współistnieć w jednym pliku. Stan „przed” trzeba zachować jako osobną kopię pliku, a w niej można dorysować fragmenty (`add_class_diagram` + `add_to_diagram`).
+- Notatki (komentarze UML) nie są obsługiwane.
 - Testowane na projektach zapisanych przez VP Community Edition 18.1. Inne wersje mają ten sam format bazy (`DB_VERSION` 20121026), ale nie były sprawdzane w programie.
+
+## Wzorce projektowe
+
+`vpp_list_patterns` opisuje parametry każdego wzorca. Przykład (Budowniczy):
+
+```json
+{"pattern": "builder",
+ "params": {"product": "Zamowienie", "builder": "BudowniczyZamowienia",
+            "concrete_builder": "BudowniczyZamowieniaKlienta", "director": "KierownikZamowien",
+            "steps": ["+dodajPozycjeZKoszyka(koszyk : Koszyk) : void", "+ustawUwagi(uwagi : String) : void"],
+            "clients": ["Klient"],
+            "fragment_diagram": "Wzorzec Budowniczy: fragment po zmianach",
+            "fragment_context": ["Koszyk", "PozycjaZamowienia", "Adres"]}}
+```
+
+Rozmieszczenie nowych klas można ustawić w `positions` (`{"Klasa": [x, y]}`), a diagramy sekwencji „po zmianach” generuje się przez `vpp_add_sequence_diagrams` z `replace_existing`. Typowy przebieg do studium wzorców: kopia „przed” (z fragmentem diagramu), wzorzec nałożony na drugą kopię, diagramy sekwencji, zrzuty z VP.
+
+Testy wzorców (potrzebują własnego projektu zapisanego w VP z klasami o nazwach jak w tests/test_patterns.py): `VPP_SAMPLE=projekt.vpp python -m pytest tests/test_patterns.py -q`.
 
 ## Test na własnym projekcie
 
@@ -119,6 +141,7 @@ Test tylko czyta twój plik. Sprawdza parser i weryfikator, a potem tworzy w kat
 | `vpp_mcp/notation.py` | Parser i serializer tekstowego formatu, w którym VP zapisuje model. Odtwarza bajt w bajt każdą definicję z plików zapisanych przez VP. |
 | `vpp_mcp/project.py` | Odczyt: klasy, składowe, typy, relacje, diagramy. |
 | `vpp_mcp/edit.py` | Zapis modelu klas i diagramu klas. |
+| `vpp_mcp/patterns.py` | Wzorce kreacyjne (Singleton, Budowniczy, Metoda wytwórcza, Fabryka abstrakcyjna, Prototyp) zbudowane na operacjach z `edit.py`. |
 | `vpp_mcp/sequence.py` | Diagramy sekwencji: generator, usuwanie, opis. |
 | `vpp_mcp/verify.py` | Weryfikator struktury: odwołania, unikalność ID, powiązania model–widok, listy, kanoniczny zapis. |
 | `vpp_mcp/server.py` | Serwer MCP (FastMCP, stdio). |

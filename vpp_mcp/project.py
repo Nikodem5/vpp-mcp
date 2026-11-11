@@ -85,6 +85,10 @@ class Project:
                 out.append(row.name)
         return out
 
+    def user_stereotypes(self, row: Row) -> List[str]:
+        """Stereotypes set by the user («Singleton»...), without the structural Interface/enumeration."""
+        return [s for s in self.stereotype_names(row.obj) if (s or "").lower() not in ("interface", "enumeration")]
+
     def kind_of(self, row: Row) -> str:
         st = [s.lower() for s in self.stereotype_names(row.obj)]
         if "interface" in st:

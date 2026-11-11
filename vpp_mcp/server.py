@@ -270,6 +270,28 @@ def vpp_verify(path: str) -> str:
         return _err(e)
 
 
+@mcp.tool()
+def vpp_render_diagram(path: str, diagram: str = "", output_png: str = "", scale: float = 1.0,
+                       crop: Optional[List[int]] = None):
+    """Rysuje diagram klas do PNG z geometrii zapisanej w pliku .vpp (klasy ze składowymi, stereotypy, linie relacji ze
+    strzałkami, rombami, licznościami, rolami). To nie jest renderer Visual Paradigm, ale pokazuje te same pozycje i rozmiary,
+    więc wystarcza do oceny układu: nakładania, linie przez klasy, przecięcia, tłok. Zwraca opis i obraz.
+    diagram: nazwa (domyślnie główny, czyli z największą liczbą klas); output_png: gdzie zapisać (domyślnie katalog
+    tymczasowy); scale: np. 0.5 dla dużych diagramów; crop: [x0, y0, x1, y1] w współrzędnych diagramu. Wymaga Pillow."""
+    try:
+        import tempfile
+        from .render import render_class_diagram
+        out = output_png or os.path.join(tempfile.gettempdir(), "vpp_render.png")
+        info = render_class_diagram(_check_source(path), diagram or None, out, scale, tuple(crop) if crop else None)
+        try:
+            from mcp.server.fastmcp import Image
+            return [info, Image(path=out)]
+        except Exception:
+            return info
+    except Exception as e:
+        return _err(e)
+
+
 # ------------------------------------------------------------------ write tools
 CHANGE_DOC = """Lista zmian wykonywanych po kolei, wszystkie albo żadna. Każda zmiana to obiekt z polem "op":
 - {"op":"add_class","name":"FabrykaZamowien","kind":"class|abstract class|interface|enumeration",

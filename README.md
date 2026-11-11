@@ -29,6 +29,7 @@ Przykładowe polecenia dla Claude'a:
 | `vpp_list_patterns`, `vpp_apply_pattern` | **Wzorce kreacyjne:** Singleton, Budowniczy (Builder), Metoda wytwórcza, Fabryka abstrakcyjna, Prototyp. Wzorzec jest nakładany na istniejące klasy: dodaje role (klasy, interfejsy, stereotypy), składowe i relacje, a opcjonalnie rysuje diagram „fragment po zmianach”. Wynik to opis ról we wzorcu i lista zmian. |
 | `vpp_add_sequence_diagrams` | Całe diagramy sekwencji z opisu: aktorzy, obiekty (także tworzone w trakcie i wywołania statyczne), call, self, create, return, found, sygnał, fragmenty loop/opt/alt, `ref`. Komunikaty są przypięte do metod z diagramu klas. |
 | `vpp_delete_sequence_diagram` | Usuwa diagram sekwencji, np. żeby wygenerować go od nowa. |
+| `vpp_render_diagram` | **Podgląd diagramu klas jako PNG** z geometrii zapisanej w pliku (klasy ze składowymi, stereotypy, linie, romby, liczności, role). To nie jest renderer VP, ale pokazuje te same pozycje, więc pozwala ocenić układ bez otwierania programu. Wymaga Pillow (instaluje się razem z serwerem). |
 | `vpp_verify` | Kontrola struktury pliku. |
 
 ## Bezpieczeństwo

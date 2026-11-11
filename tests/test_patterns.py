@@ -145,3 +145,26 @@ def test_auto_layout_fragment(src, tmp_path):
         {"op": "auto_layout", "diagram": "Fragment"}])
     ok(r, out)
     assert "Po: nakładania 0, linie_przez_klasy 0, przecięcia_linii 0" in r
+
+
+def test_auto_route_writes_bends_and_label_rectangles(src, tmp_path):
+    out = out_of(tmp_path)
+    r = S.vpp_edit_class_model(src, out, [
+        {"op": "add_class_diagram", "name": "Fragment"},
+        {"op": "add_to_diagram", "diagram": "Fragment", "classes": ["Klient", "Koszyk", "Zamowienie", "PozycjaZamowienia"]},
+        {"op": "auto_layout", "diagram": "Fragment", "route": False},
+        {"op": "auto_route", "diagram": "Fragment"}])
+    ok(r, out)
+    assert "ortogonalnie" in r
+    p = Project(out)
+    try:
+        d = p.find_diagram("Fragment", "ClassDiagram")
+        conns = [s for s in p.shapes_on(d.id) if s.model_type == "Association"]
+        assert conns
+        for s in conns:
+            assert s.obj.text("connectorStyle") == "0"
+            pts = [tuple(int(v) for v in q.split(",")) for q in s.obj.text("_points").strip('"').split(";") if q]
+            assert len(pts) >= 2
+            assert s.obj.get("multiplicityBRectangle") is not None
+    finally:
+        p.close()

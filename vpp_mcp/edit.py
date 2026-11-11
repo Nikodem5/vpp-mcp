@@ -468,7 +468,7 @@ class Editor:
         return f"{cls.name}: przesunięta na ({x}, {y}). Linie relacji przeliczone." + self._overlap_warning(d.id, sh.id)
 
     def auto_layout(self, diagram: Optional[str] = None, classes: Optional[List[str]] = None, steps: int = 14000,
-                    seed: int = 7) -> str:
+                    seed: int = 7, route: bool = True) -> str:
         """Rearranges class shapes so that relationship lines (VP draws them between shape centres) do not run through
         other classes or cross each other, related classes are close and the picture is compact. ``classes``: only
         these are moved, the others stay where they are (useful for placing new classes into an existing layout)."""
@@ -504,8 +504,92 @@ class Editor:
             self._reroute(d.id, s.id)
         after = L.evaluate([(pos[i][0], pos[i][1], boxes[i][2], boxes[i][3]) for i in range(len(shapes))], edges)
         fmt = lambda e: ", ".join(f"{k} {v}" for k, v in e.items())
-        return (f"Diagram {d.name}: przeliczono układ {len(shapes)} klas ({moved} przesunięto, {len(edges)} relacji). "
-                f"Przed: {fmt(before)}. Po: {fmt(after)}.")
+        msg = (f"Diagram {d.name}: przeliczono układ {len(shapes)} klas ({moved} przesunięto, {len(edges)} relacji). "
+               f"Przed: {fmt(before)}. Po: {fmt(after)}.")
+        if route:
+            msg += " " + self.auto_route(d.name)
+        return msg
+
+    def auto_route(self, diagram: Optional[str] = None) -> str:
+        """Replaces the straight centre-to-centre connectors of a class diagram by orthogonal polylines (bend points,
+        ``connectorStyle=0``) that run around the classes, leave and enter the boxes perpendicularly, are spread along
+        the box sides and do not overlap; association multiplicities/roles get label rectangles next to the line ends."""
+        from . import layout as L
+        d = self.p.find_diagram(diagram, "ClassDiagram") if diagram else self._default_class_diagram()
+        shapes = self._class_shapes(d.id)
+        index = {s.id: i for i, s in enumerate(shapes)}
+        boxes = [tuple(self.p.geometry(s)) for s in shapes]
+        conns = []
+        for s in self.p.shapes_on(d.id):
+            if s.model_type == "Class" or s.parent is not None:
+                continue
+            f, t = s.obj.get("_fromShape"), s.obj.get("_toShape")
+            if not (isinstance(f, Raw) and isinstance(t, Raw)):
+                continue
+            a, b = f.text.strip("<>").split(":")[-1], t.text.strip("<>").split(":")[-1]
+            if a in index and b in index and a != b:
+                conns.append((s, index[a], index[b]))
+        if not conns:
+            return f"Diagram {d.name}: brak linii do poprowadzenia."
+        routes = L.route_edges(boxes, [(i, j) for _, i, j in conns])
+        straight = 0
+        for (s, i, j), rt in zip(conns, routes):
+            if rt.get("straight"):
+                straight += 1
+                self._reroute(d.id, shapes[i].id)
+                continue
+            self._write_route(s, boxes[i], boxes[j], rt)
+        bends = sum(max(0, len(rt["points"]) - 2) for rt in routes if not rt.get("straight"))
+        return (f"Diagram {d.name}: poprowadzono {len(conns) - straight} z {len(conns)} linii ortogonalnie ({bends} zgięć)"
+                + (f", {straight} zostało prostych (brak trasy)." if straight else "."))
+
+    def _write_route(self, s: Row, bf, bt, rt: dict):
+        o = s.obj
+        pts = rt["points"]
+        rel = [(x - bf[0], y - bf[1]) for x, y in pts]                     # relative to the from-shape
+        stored = rel[:-1] + [(pts[-1][0] - bt[0], pts[-1][1] - bt[1])]       # last point: relative to the to-shape
+        o.set("_points", Raw('"' + "".join("%d,%d;" % q for q in stored) + '"'))
+        xs, ys = [q[0] for q in rel], [q[1] for q in rel]
+        for k, v in (("x", min(xs) - 50), ("y", min(ys) - 50), ("width", max(xs) - min(xs) + 100),
+                     ("height", max(ys) - min(ys) + 100)):
+            o.set(k, Raw(str(v)))
+        o.set("connectorStyle", Raw("0"))
+        seg = max(zip(rel, rel[1:]), key=lambda ab: abs(ab[0][0] - ab[1][0]) + abs(ab[0][1] - ab[1][1]))
+        mid = ((seg[0][0] + seg[1][0]) // 2, (seg[0][1] + seg[1][1]) // 2)
+        cap = o.get("_captionUIModel")
+        if isinstance(cap, Lst):
+            wid = next((int(it.value.text) for it in cap.items if isinstance(it, At) and it.key == "width"), 20)
+            for it in cap.items:
+                if isinstance(it, At) and it.key == "x":
+                    it.value = Raw(str(mid[0] - wid // 2))
+                if isinstance(it, At) and it.key == "y":
+                    it.value = Raw(str(mid[1] - 8))
+        if s.model_type == "Association" and s.model in self.p.me:
+            r = self.p.me[s.model]
+            a, b = r.obj.get("from"), r.obj.get("to")
+            if isinstance(a, Obj) and isinstance(b, Obj):
+                ea, eb = self.p._end(a), self.p._end(b)
+                for tag, end, pt, nrm in (("A", ea, rel[0], rt["n0"]), ("B", eb, rel[-1], rt["n1"])):
+                    self._place_labels(o, tag, end, pt, nrm)
+        self.dirty_de.add(s.id)
+
+    def _place_labels(self, o: Obj, tag: str, end: dict, pt, nrm):
+        """Multiplicity / role label rectangles (offsets from the line end ``pt``; the text is centred in the rectangle)."""
+        items = []
+        if end.get("multiplicity"):
+            items.append(("Multiplicity", end["multiplicity"], 40, 40, 0))
+        if end.get("role"):
+            items.append(("Role", end["role"], 48, 48, 1))
+        for kind, txt, mw, mh, slot in items:
+            tw = int(len(txt) * 6.1) + 4
+            w, h = max(mw, tw + 10), mh
+            if nrm[0] != 0:                                    # line leaves horizontally: multiplicity above, role below
+                cx, cy = nrm[0] * (tw // 2 + 24), (-12 if slot == 0 else 12)
+            else:                                              # line leaves vertically: multiplicity right, role left
+                cx, cy = ((tw // 2 + 8) if slot == 0 else -(tw // 2 + 8)), nrm[1] * 26
+            o.set(f"has{kind}{tag}Shape", Raw("T"))
+            o.set(f"{kind[0].lower()}{kind[1:]}{tag}Rectangle",
+                  Lst([Raw(str(v)) for v in (int(cx - w / 2), int(cy - h / 2), w, h)]))
 
     def _class_shapes(self, diagram: str) -> List[Row]:
         return [r for r in self.p.shapes_on(diagram) if r.model_type == "Class" and r.parent is None]

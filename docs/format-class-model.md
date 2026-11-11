@@ -662,3 +662,14 @@ All of these are implemented in `verify_vpp.py`.
 - **A new class diagram** is a copy of the `DIAGRAM` definition of an existing class diagram with a new id and name, empty `Child` list and fresh `diagramPreviewData_id`, timestamps and `pmAuthor`. It is appended to the project's diagram roots (`append_diagram_root`).
 - **An existing class on another diagram** is a second `DIAGRAM_ELEMENT` (view) of the same model element: a new view id, added to the model element's `_modelViews` and to the diagram's `Child` list. The element's `_masterViewId` is not changed. Relationships between two classes that are both drawn on the diagram get their own connector shapes (`_fromShape`/`_toShape`, `_points`) and the matching `_modelViews` entries.
 - **A diagram is only a view of the model.** A "before" and an "after" state of a class cannot coexist in one project; keep the "before" state in a separate copy of the file.
+
+
+## Linie łamane i etykiety końców (ustalone na podstawie ręcznej edycji w VP)
+
+- `_points="x0,y0;x1,y1;...;xn,yn;"`: pierwszy punkt i zgięcia we współrzędnych względem **kształtu źródłowego** (`_fromShape`),
+  ostatni punkt względem **kształtu docelowego** (`_toShape`). VP rysuje dokładnie te punkty.
+- `connectorStyle=0` włącza routing prostokątny (brak klucza = linie na ukos).
+- `x`, `y`, `width`, `height` linii: prostokąt otaczający punkty (względem kształtu źródłowego) z zapasem 50 px.
+- Etykiety końców asocjacji: flagi `hasMultiplicityAShape`, `hasMultiplicityBShape`, `hasRoleBShape` (= `T`) oraz prostokąty
+  `multiplicityARectangle`, `multiplicityBRectangle`, `roleBRectangle` = `( x, y, szer, wys )` przesunięte względem końca linii
+  (A = źródło, B = cel); tekst jest wyśrodkowany w prostokącie. `roleARectangle` / `hasRoleAShape` są domyślnie założone analogicznie (niepotwierdzone).

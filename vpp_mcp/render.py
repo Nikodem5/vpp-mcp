@@ -125,10 +125,15 @@ def render_class_diagram(path: str, diagram: Optional[str], out_png: str, scale:
                     _arrow(dr, T(*t_end), t_dir, scale)
                 if eb["navigable"] == "2":
                     _arrow(dr, T(*f_end), f_dir, scale)
-                for end, pt, dirv in ((ea, f_end, f_dir), (eb, t_end, t_dir)):
-                    lab = " ".join(x for x in (end["multiplicity"], end["role"]) if x)
-                    if lab:
-                        notes.append((lab, pt, dirv))
+                for tag, end, pt, dirv in (("A", ea, f_end, f_dir), ("B", eb, t_end, t_dir)):
+                    for kind, val in (("multiplicity", end["multiplicity"]), ("role", end["role"])):
+                        if not val:
+                            continue
+                        rect = _rect(s.obj.get(f"{kind}{tag}Rectangle"))
+                        if rect is not None and s.obj.text(f"has{kind.capitalize()}{tag}Shape") == "T":
+                            notes.append((val, (pt[0] + rect[0] + rect[2] / 2, pt[1] + rect[1] + rect[3] / 2), "centre"))
+                        else:
+                            notes.append((val, pt, (dirv, 0 if kind == "multiplicity" else 1)))
             if r is not None:
                 st = p.stereotype_names(r.obj)
                 if st:
@@ -166,19 +171,31 @@ def render_class_diagram(path: str, diagram: Optional[str], out_png: str, scale:
                 yy += 15
         # ---- end labels on top
         for lab, pt, dirv in notes:
-            if dirv is None:
-                lw = dr.textlength(lab, font=f_reg) / scale
+            lw = dr.textlength(lab, font=f_reg) / scale
+            if dirv is None:                                       # stereotype caption
                 text(pt[0] - lw / 2, pt[1] - 17, lab, fill=GREY)
-            else:
-                nx, ny = -dirv[1], dirv[0]
-                lx = pt[0] - dirv[0] * 14 + nx * 6 + (nx * dr.textlength(lab, font=f_reg) / scale if nx < 0 else 0)
-                ly = pt[1] - dirv[1] * 14 + ny * 6 - 7 + (0 if ny < 0 else 4)
-                text(lx, ly, lab, fill=(20, 20, 120))
+            elif dirv == "centre":                                 # label rectangle stored in the file (centre of the text)
+                text(pt[0] - lw / 2, pt[1] - 7, lab, fill=(20, 20, 120))
+            else:                                                  # no rectangle: VP-like default guess
+                (dx, dy), slot = dirv
+                nx, ny = -dy, dx
+                cx = pt[0] - dx * (lw / 2 + 14) + (nx * 10 if slot else -nx * 10)
+                cy = pt[1] - dy * 14 + (ny * 10 if slot else -ny * 10)
+                text(cx - lw / 2, cy - 7, lab, fill=(20, 20, 120))
         os.makedirs(os.path.dirname(os.path.abspath(out_png)), exist_ok=True)
         im.save(out_png)
         return f"Diagram {d.name}: {len(classes)} klas, {len(conns)} linii, obraz {W}x{H} px (skala {scale}), obszar x {x0}..{x1}, y {y0}..{y1}. Zapisano: {out_png}"
     finally:
         p.close()
+
+
+def _rect(v):
+    """``( x, y, w, h )`` list from the file -> tuple of ints or None."""
+    try:
+        q = [int(i.text) for i in v.items]
+        return tuple(q) if len(q) == 4 else None
+    except Exception:
+        return None
 
 
 def _dir(a, b):

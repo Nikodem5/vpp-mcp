@@ -135,3 +135,13 @@ def test_pattern_errors(src, tmp_path):
     assert "Nieznany wzorzec" in S.vpp_apply_pattern(src, out, "most", {})
     assert not os.path.exists(out)          # nothing is written on error
     assert "Singleton" in S.vpp_list_patterns()
+
+
+def test_auto_layout_fragment(src, tmp_path):
+    out = out_of(tmp_path)
+    r = S.vpp_edit_class_model(src, out, [
+        {"op": "add_class_diagram", "name": "Fragment"},
+        {"op": "add_to_diagram", "diagram": "Fragment", "classes": ["Klient", "Koszyk", "Zamowienie", "PozycjaZamowienia"]},
+        {"op": "auto_layout", "diagram": "Fragment"}])
+    ok(r, out)
+    assert "Po: nakładania 0, linie_przez_klasy 0, przecięcia_linii 0" in r

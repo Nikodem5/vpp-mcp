@@ -21,6 +21,12 @@ AUTHOR = 'Claude'
 REL_ROOT = ''
 
 
+# Visual Paradigm 18.1 draws a combined fragment / reference that is stored as a CHILD shape of an operand (_parent, relative
+# x/y) at its relative coordinates measured from the diagram origin, which scatters nested fragments over the diagram
+# (seen on a real diagram). Storing them as ordinary top-level shapes with absolute coordinates draws them in place.
+NESTED_SHAPES = False
+
+
 def new_id():
     return _ED.new_id()
 
@@ -353,7 +359,7 @@ class SD:
                 p['w'] = max(60, p['cap'] + 6)
             else:
                 p['cap'] = tw('%s : %s' % (p['name'], p['clsname'])) + 10
-                p['w'] = max(100, p['cap'] + 16)
+                p['w'] = max(100, int(p['cap'] * 1.12) + 24)
         n = len(P)
         gaps = [max(190, (P[i]['w'] + P[i + 1]['w']) // 2 + 50) for i in range(n - 1)]
         for _ in range(3):
@@ -567,8 +573,8 @@ class SD:
 
         # ---- views
         for fr in self.frags:                                   # behind everything
-            par = fr['operand']
-            rx, ry = (fr['x'], fr['top']) if par is None else (fr['x'] - par['x'], fr['top'] - par['top'])
+            par = fr['operand'] if NESTED_SHAPES else None      # see NESTED_SHAPES: nested frames are drawn as top-level shapes
+            rx, ry = fr['x'], fr['top']
             s = hdr(fr['de'], fr['name'], 'CombinedFragment')
             s += '\tparentConnectorHeaderLength=40;\n\t_fillColor=%s;\n\tbackground=%s;\n\twidth=%d;\n' % (fill(100, 122, 207, 245, 0), BLUE, fr['w'])
             s += '\t_captionUIModel=%s;\n\t_elementFont=%s;\n' % (caption(0, 0, OP_TAB_W[fr['kind']], 18, side=12), FONT)
@@ -588,13 +594,17 @@ class SD:
                 de_rows.append((od['de'], 'InteractionOperand', od['id'], None, None, s))
                 sort_ids.append(od['de'])
         for oc in self.occs:
-            par = oc['operand']
+            par_op = oc['operand']
+            par = par_op if NESTED_SHAPES else None
             s = hdr(oc['de'], oc['target'], 'InteractionOccurrence')
-            s += '\tforeground=%s;\n\tcreatorDiagramType="InteractionDiagram";\n\t_durationConstraintUIInfo=NULL;\n\tconnectToPoint=T;\n\ty=%d;\n\tx=%d;\n' % (BLACK, oc['top'] - par['top'], oc['x'] - par['x'])
-            s += '\tmetaModelElement=<%s:%s>;\n\toverrideAppearanceWithStereotypeIcon=T;\n\tparentConnectorHeaderLength=40;\n\tparentConnectorLineLength=10;\n\theight=%d;\n' % (op_path(par), oc['id'], oc['height'])
-            s += '\t_fillColor=%s;\n\twidth=%d;\n\tbackground=%s;\n\t_parent=<%s:%s>;\n\t_elementFont=%s;\n' % (fill(100, 122, 207, 245, 0), oc['w'], BLUE, D, par['de'], FONT)
+            s += '\tforeground=%s;\n\tcreatorDiagramType="InteractionDiagram";\n\t_durationConstraintUIInfo=NULL;\n\tconnectToPoint=T;\n\ty=%d;\n\tx=%d;\n' % (BLACK, oc['top'] - (par['top'] if par else 0), oc['x'] - (par['x'] if par else 0))
+            s += '\tmetaModelElement=<%s:%s>;\n\toverrideAppearanceWithStereotypeIcon=T;\n\tparentConnectorHeaderLength=40;\n\tparentConnectorLineLength=10;\n\theight=%d;\n' % (op_path(par_op), oc['id'], oc['height'])
+            s += '\t_fillColor=%s;\n\twidth=%d;\n\tbackground=%s;\n' % (fill(100, 122, 207, 245, 0), oc['w'], BLUE)
+            if par:
+                s += '\t_parent=<%s:%s>;\n' % (D, par['de'])
+            s += '\t_elementFont=%s;\n' % FONT
             s += '\t_captionUIModel=%s;\n\t_lineModel=%s;\n}' % (caption(0, 0, oc['w'], oc['height'], side=12), LINE)
-            de_rows.append((oc['de'], 'InteractionOccurrence', oc['id'], None, par['de'], s))
+            de_rows.append((oc['de'], 'InteractionOccurrence', oc['id'], None, par['de'] if par else None, s))
             sort_ids.append(oc['de'])
         for p in self.parts:
             typ = 'InteractionActor' if p['kind'] == 'actor' else 'InteractionLifeLine'

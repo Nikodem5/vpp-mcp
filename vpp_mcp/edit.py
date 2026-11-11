@@ -466,6 +466,46 @@ class Editor:
         self._reroute(d.id, sh.id)
         return f"{cls.name}: przesunięta na ({x}, {y}). Linie relacji przeliczone." + self._overlap_warning(d.id, sh.id)
 
+    def auto_layout(self, diagram: Optional[str] = None, classes: Optional[List[str]] = None, steps: int = 14000,
+                    seed: int = 7) -> str:
+        """Rearranges class shapes so that relationship lines (VP draws them between shape centres) do not run through
+        other classes or cross each other, related classes are close and the picture is compact. ``classes``: only
+        these are moved, the others stay where they are (useful for placing new classes into an existing layout)."""
+        from . import layout as L
+        d = self.p.find_diagram(diagram, "ClassDiagram") if diagram else self._default_class_diagram()
+        shapes = self._class_shapes(d.id)
+        if not shapes:
+            return f"Diagram {d.name}: brak klas."
+        index = {s.id: i for i, s in enumerate(shapes)}
+        boxes = [tuple(self.p.geometry(s)) for s in shapes]
+        edges = []
+        for s in self.p.shapes_on(d.id):
+            if s.model_type == "Class" or s.parent is not None:
+                continue
+            f, t = s.obj.get("_fromShape"), s.obj.get("_toShape")
+            if not (isinstance(f, Raw) and isinstance(t, Raw)):
+                continue
+            a, b = f.text.strip("<>").split(":")[-1], t.text.strip("<>").split(":")[-1]
+            if a in index and b in index and a != b and (index[a], index[b]) not in edges and (index[b], index[a]) not in edges:
+                edges.append((index[a], index[b]))
+        movable = None
+        if classes:
+            names = {self.p.find_class(c).id for c in classes}
+            movable = {i for i, s in enumerate(shapes) if s.model in names}
+        before = L.evaluate(boxes, edges)
+        pos = L.auto_layout(boxes, edges, movable, steps=steps, seed=seed)
+        moved = 0
+        for i, s in enumerate(shapes):
+            if (int(boxes[i][0]), int(boxes[i][1])) != pos[i]:
+                self._set_geom(s, x=pos[i][0], y=pos[i][1])
+                moved += 1
+        for s in shapes:
+            self._reroute(d.id, s.id)
+        after = L.evaluate([(pos[i][0], pos[i][1], boxes[i][2], boxes[i][3]) for i in range(len(shapes))], edges)
+        fmt = lambda e: ", ".join(f"{k} {v}" for k, v in e.items())
+        return (f"Diagram {d.name}: przeliczono układ {len(shapes)} klas ({moved} przesunięto, {len(edges)} relacji). "
+                f"Przed: {fmt(before)}. Po: {fmt(after)}.")
+
     def _class_shapes(self, diagram: str) -> List[Row]:
         return [r for r in self.p.shapes_on(diagram) if r.model_type == "Class" and r.parent is None]
 

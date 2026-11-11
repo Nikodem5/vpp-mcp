@@ -293,6 +293,8 @@ CHANGE_DOC = """Lista zmian wykonywanych po kolei, wszystkie albo żadna. Każda
    aggregation/composition: source=całość (romb przy source); directed: strzałka przy target.
 - {"op":"remove_relationship","id":"<id z vpp_list_relationships>"}
 - {"op":"move_class","class":"Koszyk","x":400,"y":120}  (przelicza linie relacji tej klasy)
+- {"op":"auto_layout","diagram":"Fragment","classes":["Nowa"]}  (automatyczny układ: linie nie przechodzą przez klasy ani się
+   nie krzyżują, powiązane klasy blisko siebie. Bez "classes" układa wszystkie klasy diagramu, z "classes" przesuwa tylko je)
 - {"op":"fit_class","class":"Koszyk"}  (dopasowuje rozmiar pudełka do treści)
 - {"op":"add_class_diagram","name":"Singleton: po zmianach"}  (nowy, pusty diagram klas, np. fragment do studium wzorca)
 - {"op":"add_to_diagram","diagram":"Singleton: po zmianach","classes":["DyspozytorDostaw","Kurier"],
@@ -318,6 +320,7 @@ OPS = {
                                                         "target_role", "stereotype", "diagram"}),
     "remove_relationship": ({"id"}, set()),
     "move_class": ({"class", "x", "y"}, {"diagram"}),
+    "auto_layout": (set(), {"diagram", "classes", "steps", "seed"}),
     "fit_class": ({"class"}, {"diagram"}),
     "add_class_diagram": ({"name"}, {"like"}),
     "add_to_diagram": ({"diagram", "classes"}, {"relationships", "positions", "columns"}),
@@ -359,6 +362,8 @@ def _apply(ed: Editor, ch: Dict[str, Any]) -> str:
                                    g("target_multiplicity"), g("target_role"), g("stereotype"), g("diagram"))
     if op == "remove_relationship":
         return ed.remove_relationship(g("id"))
+    if op == "auto_layout":
+        return ed.auto_layout(g("diagram"), g("classes"), int(g("steps", 14000)), int(g("seed", 7)))
     if op == "move_class":
         return ed.move_class(g("class"), int(g("x")), int(g("y")), g("diagram"))
     if op == "fit_class":

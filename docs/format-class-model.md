@@ -664,15 +664,15 @@ All of these are implemented in `verify_vpp.py`.
 - **A diagram is only a view of the model.** A "before" and an "after" state of a class cannot coexist in one project; keep the "before" state in a separate copy of the file.
 
 
-## Linie łamane i etykiety końców (ustalone na podstawie ręcznej edycji w VP)
+## Polyline connectors and end labels (established from manual editing in VP)
 
-- `_points="x0,y0;x1,y1;...;xn,yn;"`: pierwszy punkt i zgięcia we współrzędnych względem **kształtu źródłowego** (`_fromShape`),
-  ostatni punkt względem **kształtu docelowego** (`_toShape`). VP rysuje dokładnie te punkty.
-- `connectorStyle=0` włącza routing prostokątny (brak klucza = linie na ukos).
-- `x`, `y`, `width`, `height` linii: prostokąt otaczający punkty (względem kształtu źródłowego) z zapasem 50 px.
-- Etykiety końców asocjacji: flagi `hasMultiplicityAShape`, `hasMultiplicityBShape`, `hasRoleBShape` (= `T`) oraz prostokąty
-  `multiplicityARectangle`, `multiplicityBRectangle`, `roleBRectangle` = `( x, y, szer, wys )` przesunięte względem końca linii
-  (A = źródło, B = cel); tekst jest wyśrodkowany w prostokącie. `roleARectangle` / `hasRoleAShape` są domyślnie założone analogicznie (niepotwierdzone).
-- Podpis linii (`_captionUIModel`, np. «create», «use»): `@x`, `@y` to lewy górny róg pola **względem pierwszego punktu linii**
-  (nie środka). VP ucina napis do `<<c...`, jeśli pole jest za wąskie: szerokość ok. `4.7 * (liczba znaków napisu z << >>) + 31`,
-  wysokość 15 (np. «create» = 78, «use» = 64).
+- `_points="x0,y0;x1,y1;...;xn,yn;"`: the first point and the bends are in coordinates relative to the **source shape** (`_fromShape`),
+  the last point is relative to the **target shape** (`_toShape`). VP draws exactly these points.
+- `connectorStyle=0` enables orthogonal (rectangular) routing (no key = diagonal lines).
+- `x`, `y`, `width`, `height` of the line: the bounding rectangle of the points (relative to the source shape) with a 50 px margin.
+- Association end labels: the flags `hasMultiplicityAShape`, `hasMultiplicityBShape`, `hasRoleBShape` (= `T`) and the rectangles
+  `multiplicityARectangle`, `multiplicityBRectangle`, `roleBRectangle` = `( x, y, width, height )`, offset relative to the end of the line
+  (A = source, B = target); the text is centered in the rectangle. `roleARectangle` / `hasRoleAShape` are presumably set up analogously by default (unconfirmed).
+- Line caption (`_captionUIModel`, e.g. «create», «use»): `@x`, `@y` are the top-left corner of the box **relative to the first point of the line**
+  (not its center). VP truncates the text to `<<c...` if the box is too narrow: width is about `4.7 * (number of characters of the text including << >>) + 31`,
+  height 15 (e.g. «create» = 78, «use» = 64).

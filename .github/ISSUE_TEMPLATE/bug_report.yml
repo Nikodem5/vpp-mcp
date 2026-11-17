@@ -1,0 +1,74 @@
+name: Bug report
+description: Something does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not attach confidential or graded coursework `.vpp` files. If a file is needed, share a minimal reproduction. Polish or English is fine.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps / prompt given to Claude
+      description: The prompt or the tool call(s) that trigger the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: vpp-mcp-version
+    attributes:
+      label: vpp-mcp version
+      description: Output of `python -m pip show vpp-mcp`
+      placeholder: "0.4.1"
+    validations:
+      required: true
+  - type: input
+    id: vp-version
+    attributes:
+      label: Visual Paradigm version
+      description: Edition and build, e.g. Community Edition 18.1 (build 20260914)
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - Claude Desktop
+        - Claude Code
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output
+      render: text

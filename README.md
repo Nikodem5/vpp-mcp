@@ -44,10 +44,18 @@ Przykładowe polecenia dla Claude'a:
 ## Instalacja
 
 Potrzebujesz:
-- Pythona 3.10 lub nowszego (na Windows z [python.org](https://www.python.org/downloads/), z zaznaczonym „Add python.exe to PATH”),
+- Pythona 3.10 lub nowszego i gita (instrukcje dla każdego systemu niżej),
 - aplikacji Claude na komputer (Claude Desktop) albo Claude Code.
 
-### 1. Zainstaluj serwer
+### Windows
+
+**1. Python i git**
+
+Pobierz Pythona z [python.org](https://www.python.org/downloads/) i w instalatorze zaznacz „Add python.exe to PATH”. Sprawdzisz to poleceniem `py --version` albo `python --version`.
+
+Git jest potrzebny, bo serwer instaluje się prosto z repozytorium. Zainstaluj [Git for Windows](https://git-scm.com/download/win) albo poleceniem `winget install Git.Git`.
+
+**2. Zainstaluj serwer**
 
 ```
 python -m pip install git+https://github.com/Nikodem5/vpp-mcp
@@ -55,7 +63,7 @@ python -m pip install git+https://github.com/Nikodem5/vpp-mcp
 
 Sprawdzenie: `python -c "import vpp_mcp.server"` nie powinno wypisać żadnego błędu.
 
-### 2a. Dodaj do Claude Desktop
+**3a. Dodaj do Claude Desktop**
 
 W aplikacji Claude otwórz **Settings → Developer → Edit Config**. Otworzy się plik `claude_desktop_config.json` (na Windows w `%APPDATA%\Claude\`). Dopisz serwer w sekcji `mcpServers`:
 
@@ -72,28 +80,23 @@ W aplikacji Claude otwórz **Settings → Developer → Edit Config**. Otworzy s
 
 Jeśli masz już inne serwery, dopisz sam wpis `"visual-paradigm": {...}` obok nich i pilnuj przecinków. Potem **zamknij i uruchom ponownie aplikację Claude**. Serwer pojawi się na liście narzędzi.
 
-Jeśli Claude nie widzi serwera, zamiast `"python"` wpisz pełną ścieżkę do Pythona, np. `"C:\\Users\\TWOJA_NAZWA\\AppData\\Local\\Programs\\Python\\Python312\\python.exe"`. Ścieżkę pokaże polecenie `where python`. Na Linuksie i macOS zobacz sekcję niżej.
+Jeśli Claude nie widzi serwera, zamiast `"python"` wpisz pełną ścieżkę do Pythona, np. `"C:\\Users\\TWOJA_NAZWA\\AppData\\Local\\Programs\\Python\\Python312\\python.exe"`. Ścieżkę pokaże polecenie `where python`.
 
-### 2b. Albo dodaj do Claude Code
+**3b. Albo dodaj do Claude Code**
 
 ```
 claude mcp add visual-paradigm -- python -m vpp_mcp
 ```
 
-### Linux i macOS
+### macOS
 
-Na obu systemach najprościej zainstalować serwer w osobnym wirtualnym środowisku. Systemowy Python (Debian/Ubuntu) i Python z Homebrew blokują `pip install` poza takim środowiskiem (błąd `externally-managed-environment`).
+Najprościej zainstalować serwer w osobnym wirtualnym środowisku. Python z Homebrew blokuje `pip install` poza takim środowiskiem (błąd `externally-managed-environment`).
 
 **1. Python 3.10+ i git**
 
+Przez [Homebrew](https://brew.sh):
+
 ```bash
-# Debian/Ubuntu
-sudo apt install python3 python3-venv python3-pip git
-
-# Fedora
-sudo dnf install python3 git
-
-# macOS (Homebrew, https://brew.sh)
 brew install python git
 ```
 
@@ -118,9 +121,9 @@ Sprawdzenie, które nie powinno wypisać błędu:
 claude mcp add visual-paradigm -- ~/.vpp-mcp-venv/bin/python -m vpp_mcp
 ```
 
-**3b. Claude Desktop (macOS)**
+**3b. Claude Desktop**
 
-Claude Desktop nie ma oficjalnej wersji na Linuksa, tam użyj Claude Code. Na macOS otwórz **Settings → Developer → Edit Config**. Plik to `~/Library/Application Support/Claude/claude_desktop_config.json`. Wpisz pełną ścieżkę do Pythona z środowiska (`~` nie jest tu rozwijane), czyli `/Users/TWOJA_NAZWA/.vpp-mcp-venv/bin/python`:
+Otwórz **Settings → Developer → Edit Config**. Plik to `~/Library/Application Support/Claude/claude_desktop_config.json`. Wpisz pełną ścieżkę do Pythona z środowiska (`~` nie jest tu rozwijane), czyli `/Users/TWOJA_NAZWA/.vpp-mcp-venv/bin/python`:
 
 ```json
 {
@@ -135,7 +138,44 @@ Claude Desktop nie ma oficjalnej wersji na Linuksa, tam użyj Claude Code. Na ma
 
 Potem całkowicie zamknij (Cmd+Q) i uruchom ponownie Claude Desktop.
 
-Ścieżki do plików `.vpp` podajesz w formacie systemowym, np. `/home/ania/projekty/projekt.vpp` albo `/Users/ania/projekty/projekt.vpp`.
+### Linux
+
+Najprościej zainstalować serwer w osobnym wirtualnym środowisku. Systemowy Python (Debian/Ubuntu) blokuje `pip install` poza takim środowiskiem (błąd `externally-managed-environment`).
+
+Claude Desktop nie ma oficjalnej wersji na Linuksa, więc na Linuksie używasz Claude Code.
+
+**1. Python 3.10+ i git**
+
+```bash
+# Debian/Ubuntu
+sudo apt install python3 python3-venv python3-pip git
+
+# Fedora
+sudo dnf install python3 git
+```
+
+Wersję sprawdzisz poleceniem `python3 --version`.
+
+**2. Pobierz i zainstaluj serwer**
+
+```bash
+python3 -m venv ~/.vpp-mcp-venv
+~/.vpp-mcp-venv/bin/python -m pip install git+https://github.com/Nikodem5/vpp-mcp
+```
+
+Sprawdzenie, które nie powinno wypisać błędu:
+
+```bash
+~/.vpp-mcp-venv/bin/python -c "import vpp_mcp.server"
+```
+
+**3. Dodaj do Claude Code**
+
+```bash
+claude mcp add visual-paradigm -- ~/.vpp-mcp-venv/bin/python -m vpp_mcp
+```
+
+Ścieżki do plików `.vpp` podajesz w formacie systemowym, np. `C:\projekty\projekt.vpp`, `/home/ania/projekty/projekt.vpp` albo `/Users/ania/projekty/projekt.vpp`.
 
 ### Aktualizacja
 

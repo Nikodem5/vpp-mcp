@@ -1,6 +1,6 @@
 # Contributing to vpp-mcp
 
-Thanks for helping. The README and `docs/` are in Polish; issues and pull requests may be written in Polish or English.
+Thanks for helping. The README and `docs/` are in English (a Polish README is in `README.pl.md`); issues and pull requests may be written in English or Polish.
 
 ## Reporting bugs and requesting features
 

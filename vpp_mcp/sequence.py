@@ -336,10 +336,9 @@ class SD:
                 self.cursor += 10
             elif k == 'ref':
                 _, target, covered = it
-                if operand is None:
-                    raise VppError('ref outside operand not supported')
                 oc = dict(id=new_id(), de=new_id(), target=target, covered=covered, top=self.cursor - 10, height=40, operand=operand)
-                operand['children'].append(('occ', oc))
+                if operand is not None:
+                    operand['children'].append(('occ', oc))
                 self.occs.append(oc)
                 self.cursor += 50
             else:
@@ -421,7 +420,7 @@ class SD:
                 od['x'], od['w'] = fr['x'], fr['w']
         for oc in self.occs:
             cov = [self.pk[k] for k in oc['covered']]
-            pad = 30 - 9 * (oc['operand']['frag']['depth'] + 1)
+            pad = 30 - 9 * ((oc['operand']['frag']['depth'] + 1) if oc['operand'] is not None else 0)
             oc['x'] = min(p['x'] for p in cov) - pad
             oc['w'] = max(p['x'] + p['w'] for p in cov) + pad - oc['x']
         for g in self.gates:
@@ -521,7 +520,7 @@ class SD:
             s += '\t_masterViewId="%s";\n\tpmLastModified="%d";\n\tpmAuthor="%s";\n\tpmCreateDateTime="%d";\n' % (oc['de'], t, AUTHOR, t)
             s += views(D, oc['de'])
             s += '\tlastModifiedTime=%d;\n\t_modelEditable=T;\n}' % t
-            me_rows.append((oc['id'], 'InteractionOccurrence', oc['operand']['id'], oc['target'], s))
+            me_rows.append((oc['id'], 'InteractionOccurrence', oc['operand']['id'] if oc['operand'] is not None else F, oc['target'], s))
 
         # ---- gates
         for g in self.gates:
@@ -567,7 +566,8 @@ class SD:
         s = hdr(F, name, 'Frame')
         if self.gates:
             s += reflist('gates', ['%s:%s' % (F, g['id']) for g in self.gates])
-        kids = [lp(p) for p in self.parts] + ['%s:%s' % (F, fr['id']) for fr in self.frags if fr['operand'] is None] + ['%s:%s' % (F, g['id']) for g in self.gates]
+        kids = ([lp(p) for p in self.parts] + ['%s:%s' % (F, fr['id']) for fr in self.frags if fr['operand'] is None]
+                + ['%s:%s' % (F, oc['id']) for oc in self.occs if oc['operand'] is None] + ['%s:%s' % (F, g['id']) for g in self.gates])
         s += '\tpmLastModified="%d";\n\tpmAuthor="%s";\n' % (t, AUTHOR)
         s += reflist('Child', kids)
         s += '\tpmCreateDateTime="%d";\n\t_modelViews=NULL;\n\tlastModifiedTime=%d;\n\t_modelEditable=T;\n}' % (t, t)
@@ -597,10 +597,10 @@ class SD:
                 sort_ids.append(od['de'])
         for oc in self.occs:
             par_op = oc['operand']
-            par = par_op if NESTED_SHAPES else None
+            par = par_op if NESTED_SHAPES and par_op is not None else None
             s = hdr(oc['de'], oc['target'], 'InteractionOccurrence')
             s += '\tforeground=%s;\n\tcreatorDiagramType="InteractionDiagram";\n\t_durationConstraintUIInfo=NULL;\n\tconnectToPoint=T;\n\ty=%d;\n\tx=%d;\n' % (BLACK, oc['top'] - (par['top'] if par else 0), oc['x'] - (par['x'] if par else 0))
-            s += '\tmetaModelElement=<%s:%s>;\n\toverrideAppearanceWithStereotypeIcon=T;\n\tparentConnectorHeaderLength=40;\n\tparentConnectorLineLength=10;\n\theight=%d;\n' % (op_path(par_op), oc['id'], oc['height'])
+            s += '\tmetaModelElement=<%s:%s>;\n\toverrideAppearanceWithStereotypeIcon=T;\n\tparentConnectorHeaderLength=40;\n\tparentConnectorLineLength=10;\n\theight=%d;\n' % (op_path(par_op) if par_op is not None else F, oc['id'], oc['height'])
             s += '\t_fillColor=%s;\n\twidth=%d;\n\tbackground=%s;\n' % (fill(100, 122, 207, 245, 0), oc['w'], BLUE)
             if par:
                 s += '\t_parent=<%s:%s>;\n' % (D, par['de'])
@@ -959,8 +959,14 @@ def describe_sequence_diagram(p: Project, name: str) -> dict:
             frags.append({'_name': _natkey(r.name or ''), 'operator': OPERATOR_NAME.get(int(r.obj.text('interactionOperator') or 0), r.obj.text('interactionOperator')),
                           'guards': [o.obj.get('guard').text('constraint') if isinstance(o.obj.get('guard'), Obj) else None for o in ops]})
     frags.sort(key=lambda f: f.pop('_name'))
+    by_frame = {ref_id(x.obj.get('_rootFrame').text): x.name for x in p.dg.values()
+                if x.model_type == 'InteractionDiagram' and isinstance(x.obj.get('_rootFrame'), Raw)}
+    refs = sorted(((by_frame.get(ref_id(r.obj.text('refersTo') or ''), '?'), 'frame' if r.parent == frame else 'operand')
+                   for i, r in p.me.items() if r.model_type == 'InteractionOccurrence' and _under(p, i, frame)),
+                  key=lambda x: (_natkey(x[0]), x[1]))
     return {'diagram': d.name, 'participants': [x[1] for x in parts],
-            'messages': [f'{s} [{k}] {a} -> {b}: {l}' for s, k, a, b, l in msgs], 'fragments': frags}
+            'messages': [f'{s} [{k}] {a} -> {b}: {l}' for s, k, a, b, l in msgs], 'fragments': frags,
+            'refs': [f'{n} ({w})' for n, w in refs]}
 
 
 def _natkey(s):

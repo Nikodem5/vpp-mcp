@@ -442,7 +442,7 @@ uYcWJcaGAqACJQrL:"Save to Repo":InteractionOperand {      (default names "Operan
   - A nested CF row has PARENT_ID = the operand.
   - The full path grows with each level, e.g. `<Frame:CF:Operand:CF2>` and `<Frame:CF:Op:CF2:Op2>`. Both the `Child` lists and `metaModelElement` use the full path.
   - The Frame's `Child` lists only top-level CFs.
-- **InteractionOccurrence (ref)** can be a child of the Frame or of an operand (SGT has 5 inside operands):
+- **InteractionOccurrence (ref)** can be a child of the Frame or of an operand (SGT has 5 inside operands). A ref directly in the Frame has PARENT_ID = Frame, `metaModelElement=<Frame:Occ>`, is listed in the Frame's `Child`, and its shape has no `_parent`. The generator emits both forms:
 
 ```
 AeijJQaGAqBwARVY:"InteractionUse":InteractionOccurrence {

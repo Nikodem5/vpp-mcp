@@ -6,6 +6,7 @@ the structural verifier before it replaces the output path.
 """
 from __future__ import annotations
 
+import collections
 import json
 import os
 import shutil
@@ -75,7 +76,19 @@ def _write(source_path: str, output_path: str, overwrite_output: bool, work) -> 
         ed.commit()
         ed.close()
         ed = None
-        errs = verify(tmp)
+        errs = verify(tmp, max_errors=10**9)
+        if errs:
+            known = collections.Counter(verify(src, max_errors=10**9))
+            fresh = []
+            for e in errs:
+                if known[e] > 0:
+                    known[e] -= 1
+                else:
+                    fresh.append(e)
+            skipped = len(errs) - len(fresh)
+            errs = fresh
+            if skipped:
+                notes.append(f"Uwaga: plik źródłowy miał już {skipped} problem(ów) struktury; zostały pominięte.")
         if errs:
             raise VppError("Weryfikacja nie przeszła, nic nie zapisano:\n- " + "\n- ".join(errs[:15]))
         os.replace(tmp, out)

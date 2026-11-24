@@ -12,7 +12,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 from .notation import Obj, Lst, Raw, At, parse, dump, ref, string
-from .project import Project, Row, VppError, _walk_objs
+from .project import Project, Row, VppError, _walk_objs, ref_id
 
 ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._"
 PRIMITIVES = ("boolean", "byte", "char", "double", "float", "int", "long", "short", "void")

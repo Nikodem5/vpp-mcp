@@ -161,7 +161,7 @@ class Editor:
                 c.execute("update DIAGRAM set DEFINITION=?, NAME=? where ID=?", (dump(r.obj).encode("utf-8"), r.name, i))
             else:
                 c.execute("insert into DIAGRAM (ID, DIAGRAM_TYPE, PARENT_MODEL_ID, NAME, DEFINITION) values (?,?,?,?,?)",
-                          (i, r.model_type, None, r.name, dump(r.obj).encode("utf-8")))
+                          (i, r.model_type, r.parent, r.name, dump(r.obj).encode("utf-8")))
         if self.dirty_info:
             c.execute("update PROJECT_INFO set ROOT_MODEL_ELEMENTS_DEFINITION=?, DIAGRAMS_DEFINITION=?",
                       (dump(self.p.root_list), dump(self.p.diagram_list)))
@@ -196,6 +196,71 @@ class Editor:
     def append_diagram_root(self, did: str):
         _append_ref(self.p.diagram_list, "Child", did)
         self.dirty_info = True
+
+    # ------------------------------------------------------------ Model folders (Model Explorer)
+    def model_path(self, mid: str) -> str:
+        """``root:...:mid`` path of a Model, as VP writes it in references."""
+        ids = []
+        while mid:
+            ids.append(mid)
+            mid = self.p.me[mid].parent
+        return ":".join(reversed(ids))
+
+    def _new_model(self, name: str, parent: Optional[str]) -> Row:
+        mid = self.new_id()
+        t = self.ts()
+        o = Obj(mid, name, "Model", [("pmLastModified", Raw(f'"{t}"')), ("pmAuthor", string(self.author)),
+                                     ("pmCreateDateTime", Raw(f'"{t}"')), ("_modelViews", Raw("NULL")),
+                                     ("_modelEditable", Raw("T"))])
+        row = self.add_me(o, "Model", parent, name)
+        if parent is None:
+            self.append_root(mid)
+        else:
+            self.add_model_child(self.p.me[parent], f"{self.model_path(parent)}:{mid}")
+        return row
+
+    def add_model_child(self, model: Row, path: str):
+        """Append a path reference to a Model's ``Child`` (VP writes it before ``pmCreateDateTime``)."""
+        if not isinstance(model.obj.get("Child"), Lst):
+            model.obj.set("Child", Lst([]), before="pmCreateDateTime")
+        model.obj.get("Child").items.append(ref(path))
+        self.touch(model)
+
+    def resolve_folder(self, name: str) -> Row:
+        """The Model (folder in the Model Explorer) called ``name``; created at top level when missing.
+        A name that exists several times needs a path ``Parent/Child``; missing path segments are created."""
+        name = (name or "").strip()
+        if not name:
+            raise VppError("Nazwa folderu (Model) nie może być pusta.")
+        models = self.p.by_type("Model")
+
+        def pick(cands: List[Row], what: str) -> Optional[Row]:
+            if len(cands) > 1:
+                raise VppError(f"Folder {what!r} jest niejednoznaczny ({len(cands)} Modele o tej nazwie). "
+                               f"Podaj ścieżkę, np. 'Nadrzędny/{what.split('/')[-1]}'.")
+            return cands[0] if cands else None
+
+        hit = pick([m for m in models if m.name == name], name)
+        if hit or "/" not in name:
+            return hit or self._new_model(name, None)
+        cur = None
+        for seg in [s.strip() for s in name.split("/") if s.strip()]:
+            nxt = pick([m for m in models if m.name == seg and m.parent == (cur.id if cur else None)], name)
+            cur = nxt or self._new_model(seg, cur.id if cur else None)
+            models = self.p.by_type("Model")
+        return cur
+
+    def place_diagram(self, did: str, folder: Row):
+        """Put an existing top-level diagram into a Model: PARENT_MODEL_ID, ``parentModel`` in the diagram and
+        the id in the Model's ``_subDiagrams`` (the diagram stays in rootDiagrams too)."""
+        d = self.p.dg[did]
+        d.parent = folder.id
+        d.obj.set("parentModel", ref(self.model_path(folder.id)), before="diagramPreviewData_id")
+        if not isinstance(folder.obj.get("_subDiagrams"), Lst):
+            folder.obj.set("_subDiagrams", Lst([]), before="pmLastModified")
+        folder.obj.get("_subDiagrams").items.append(Raw(f'"{did}"'))   # quoted ids, unlike Child refs
+        self.touch(folder)
+        self.dirty_dg.add(did)
 
     def append_to_diagram(self, did: str, de_id: str, sort_list: bool = False):
         d = self.p.dg[did]
@@ -760,8 +825,9 @@ class Editor:
         return f"Dodano {k} {name} na diagramie {d.name} w ({x}, {y}), rozmiar {w}x{h}, składowych: {len(kids)}" + warn
 
     # ------------------------------------------------------------ class diagrams
-    def add_class_diagram(self, name: str, like: Optional[str] = None) -> str:
-        """A new, empty class diagram (a copy of the options of ``like`` or of the main class diagram)."""
+    def add_class_diagram(self, name: str, like: Optional[str] = None, folder: Optional[str] = None) -> str:
+        """A new, empty class diagram (a copy of the options of ``like`` or of the main class diagram),
+        optionally inside a Model folder (created when missing)."""
         if any(d.name == name for d in self.p.dg.values()):
             raise VppError(f"Diagram {name!r} już istnieje.")
         src = self.p.find_diagram(like, "ClassDiagram") if like else self._default_class_diagram()
@@ -769,6 +835,7 @@ class Editor:
         t = self.ts()
         o = parse(dump(src.obj))
         o.id, o.name, o.name_raw = did, name, None
+        o.remove("parentModel")
         for k, v in (("pmCreateDateTime", Raw(f'"{t}"')), ("pmLastModified", Raw(f'"{t}"')),
                      ("creationTime", Raw(str(t))), ("lastModified", Raw(str(t))),
                      ("diagramPreviewData_id", string(self.new_id())), ("zoomRatio", Raw("1.0")),
@@ -780,6 +847,10 @@ class Editor:
         self.p.dg[did] = Row("DIAGRAM", did, o, "ClassDiagram", None, name)
         self.dirty_dg.add(did)
         self.append_diagram_root(did)
+        if folder:
+            fo = self.resolve_folder(folder)
+            self.place_diagram(did, fo)
+            return f"Dodano pusty diagram klas {name!r} w folderze {fo.name!r}."
         return f"Dodano pusty diagram klas {name!r}."
 
     def add_to_diagram(self, diagram: str, classes: List[str], relationships: bool = True,

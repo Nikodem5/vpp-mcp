@@ -34,6 +34,8 @@ Zasady pracy:
    Układ linii relacji jest przybliżony; użytkownik porządkuje je ręcznie.
 6. Komunikaty w diagramach sekwencji muszą wskazywać istniejące metody klas (dopasowanie po nazwie i liczbie argumentów,
    z dziedziczeniem). Brakujące metody dodaj najpierw przez vpp_edit_class_model.
+7. Nowe diagramy domyślnie leżą na najwyższym poziomie projektu. Żeby trafiły do folderu (Model) w Model Explorer, podaj "folder"
+   (diagramy sekwencji i add_class_diagram) albo "fragment_folder" (vpp_apply_pattern); brakujący folder zostanie utworzony.
 """
 
 mcp = FastMCP("visual-paradigm", instructions=INSTRUCTIONS)
@@ -356,6 +358,8 @@ CHANGE_DOC = """Lista zmian wykonywanych po kolei, wszystkie albo żadna. Każda
    krawędzi, rozsunięte wzdłuż boków, etykiety krotności/ról obok końców linii; klasy zostają w miejscu)
 - {"op":"fit_class","class":"Koszyk"}  (dopasowuje rozmiar pudełka do treści)
 - {"op":"add_class_diagram","name":"Singleton: po zmianach"}  (nowy, pusty diagram klas, np. fragment do studium wzorca)
+   Opcjonalnie "folder":"Diagramy klas" - nazwa Modelu (folderu w Model Explorer), w którym ma leżeć diagram; brakujący folder
+   powstaje na najwyższym poziomie, "Rodzic/Dziecko" wskazuje folder zagnieżdżony (bez "folder" diagram leży na najwyższym poziomie).
 - {"op":"add_to_diagram","diagram":"Singleton: po zmianach","classes":["DyspozytorDostaw","Kurier"],
    "relationships":true,"positions":{"Kurier":[400,40]},"columns":3}
    (rysuje ISTNIEJĄCE klasy na tym diagramie jako drugi widok tego samego elementu modelu i, przy relationships=true,
@@ -382,7 +386,7 @@ OPS = {
     "auto_layout": (set(), {"diagram", "classes", "steps", "seed", "route"}),
     "auto_route": (set(), {"diagram"}),
     "fit_class": ({"class"}, {"diagram"}),
-    "add_class_diagram": ({"name"}, {"like"}),
+    "add_class_diagram": ({"name"}, {"like", "folder"}),
     "add_to_diagram": ({"diagram", "classes"}, {"relationships", "positions", "columns"}),
 }
 
@@ -431,7 +435,7 @@ def _apply(ed: Editor, ch: Dict[str, Any]) -> str:
     if op == "fit_class":
         return ed.fit_class(g("class"), g("diagram"))
     if op == "add_class_diagram":
-        return ed.add_class_diagram(g("name"), g("like"))
+        return ed.add_class_diagram(g("name"), g("like"), g("folder"))
     if op == "add_to_diagram":
         return ed.add_to_diagram(g("diagram"), g("classes"), bool(g("relationships", True)), g("positions"), g("columns"))
     raise VppError(f"Nieznana operacja {op!r}.")
@@ -473,7 +477,10 @@ SD_DOC = """Dodaje całe diagramy sekwencji (każdy jako osobny diagram). Każdy
  ]}
 Uczestników wskazuje się nazwą aktora albo nazwą obiektu (':Klasa' gdy name puste). Operacja: nazwa(arg1, arg2) — argumenty
 to tylko etykiety, liczy się nazwa i liczba argumentów; metoda musi istnieć w klasie odbiorcy lub jej nadklasie/interfejsie.
-Zwroty (return) muszą wracać do obiektu, który jest aktywny (wywołał). replace_existing=true najpierw usuwa diagramy o tych nazwach."""
+Zwroty (return) muszą wracać do obiektu, który jest aktywny (wywołał). replace_existing=true najpierw usuwa diagramy o tych nazwach.
+Opcjonalne pole "folder" w opisie diagramu ("folder":"Diagramy sekwencji") to nazwa Modelu (folderu w Model Explorer), w którym ma
+leżeć diagram; brakujący folder powstaje na najwyższym poziomie, "Rodzic/Dziecko" wskazuje folder zagnieżdżony, a nazwa występująca
+w kilku folderach wymaga takiej ścieżki. Bez "folder" diagram trafia na najwyższy poziom projektu."""
 
 
 @mcp.tool(description="Dodaje diagramy sekwencji do kopii projektu.\n" + SD_DOC)
@@ -509,7 +516,8 @@ PATTERN_DOC = "Wzorce kreacyjne jako gotowe zmiany modelu klas (wynik do NOWEGO 
     f"- {k}: {v[2]}" for k, v in PATTERNS.items()) + """
 Wspólne parametry (params): "diagram" (na którym diagramie rysować nowe klasy; domyślnie główny), "positions" ({"Klasa":[x,y]}),
 "stereotypes" (true: role wzorca jako stereotypy klas, domyślnie true), "language" ("pl"/"en", nazwy ról),
-"fragment_diagram" (nazwa nowego diagramu klas z samym wzorcem, do studium) i "fragment_context" (dodatkowe klasy na tym diagramie).
+"fragment_diagram" (nazwa nowego diagramu klas z samym wzorcem, do studium), "fragment_context" (dodatkowe klasy na tym diagramie)
+i "fragment_folder" (Model/folder w Model Explorer, w którym ma leżeć fragment_diagram; brakujący zostanie utworzony).
 Wynik zawiera listę zmian i mapę ról. Żeby pokazać stan 'przed', zrób fragment_diagram w KOPII pliku sprzed wzorca
 (diagram jest widokiem modelu, więc w jednym pliku nie da się zachować 'przed' obok 'po')."""
 

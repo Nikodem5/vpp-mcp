@@ -804,6 +804,10 @@ def build_sequence_diagrams(ed, specs: List[dict]) -> List[str]:
     global _ED, AUTHOR, REL_ROOT
     p = ed.p
     conv = [convert_spec(s) for s in specs]
+    folders = [s.get('folder') for s in specs]
+    for f in folders:
+        if f is not None and not (isinstance(f, str) and f.strip()):
+            raise VppError('Pole folder musi być niepustą nazwą Modelu (folderu w Model Explorer).')
     existing = {d.name for d in p.dg.values()}
     for s in conv:
         if s['name'] in existing:
@@ -816,12 +820,31 @@ def build_sequence_diagrams(ed, specs: List[dict]) -> List[str]:
         frame_ids = _frames_by_name(p)
         for s in conv:
             frame_ids[s['name']] = new_id()
+        # frames living in a Model folder are referenced through the folder path (own frame, refersTo of a ref)
+        fos = {s['name']: ed.resolve_folder(f) if f else None for s, f in zip(conv, folders)}
+        prefix = {}
+        for fid in frame_ids.values():
+            par = p.me[fid].parent if fid in p.me else None
+            if par in p.me and p.me[par].model_type == 'Model':
+                prefix[fid] = ed.model_path(par)
+        for s in conv:
+            if fos[s['name']]:
+                prefix[frame_ids[s['name']]] = ed.model_path(fos[s['name']].id)
+        rx = re.compile('<(' + '|'.join(map(re.escape, prefix)) + ')(?=[:>])') if prefix else None
         report = []
         for s in conv:
             sd = SD(model, s, frame_ids, mc)
             sd.run()
             sd.layout()
             me_rows, de_rows, (did, name, dtext), msg_ids = sd.build(None)
+            fo = fos[name]
+            F = frame_ids[name]
+            if rx:
+                sub = lambda t: rx.sub(lambda m: '<' + prefix[m.group(1)] + ':' + m.group(1), t)
+                me_rows = [(i, typ, fo.id if fo and i == F else par, nm, sub(txt)) for i, typ, par, nm, txt in me_rows]
+                de_rows = [(i, typ, mid, prefix[F] + ':' + comp if comp and F in prefix and comp.startswith(F + ':') else comp,
+                            par, sub(txt)) for i, typ, mid, comp, par, txt in de_rows]
+                dtext = sub(dtext)
             for i, typ, parent, nm, txt in me_rows:
                 ed.add_me(parse(txt), typ, parent, nm)
             for i, typ, mid, comp, par, txt in de_rows:
@@ -831,7 +854,11 @@ def build_sequence_diagrams(ed, specs: List[dict]) -> List[str]:
             p.dg[did] = Row('DIAGRAM', did, parse(dtext), 'InteractionDiagram', None, name)
             ed.dirty_dg.add(did)
             ed.append_diagram_root(did)
-            ed.append_root(frame_ids[name])
+            if fo:
+                ed.add_model_child(fo, '%s:%s' % (prefix[F], F))
+                ed.place_diagram(did, fo)
+            else:
+                ed.append_root(frame_ids[name])
             cont = p.me[mc]
             for m in msg_ids:
                 v = cont.obj.get('Child')
@@ -879,6 +906,8 @@ def delete_sequence_diagram(ed, name: str) -> str:
             keep = [it for it in v.items if not (isinstance(it, Raw) and it.text.strip('<>').split(':')[-1] in gone)]
             if len(keep) != len(v.items):
                 v.items = keep
+                if not keep and c.model_type == 'Model':
+                    c.obj.remove('Child')       # VP omits an empty Child on a Model
                 ed.touch(c)
     c = p.conn
     for i in gone:
@@ -902,6 +931,8 @@ def delete_sequence_diagram(ed, name: str) -> str:
             keep = [it for it in sd.items if not (isinstance(it, Raw) and ref_id(it.text) == d.id)]
             if len(keep) != len(sd.items):
                 sd.items = keep
+                if not keep and m.model_type == 'Model':
+                    m.obj.remove('_subDiagrams')   # VP omits it when the Model has no diagrams
                 ed.touch(m)
     # caches / documentation tied to this diagram
     for (path,) in c.execute('select PATH from PROJECT_FILE').fetchall():

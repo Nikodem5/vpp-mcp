@@ -203,7 +203,7 @@ def vpp_list_relationships(path: str, class_name: Optional[str] = None) -> str:
 @mcp.tool()
 def vpp_get_sequence_diagram(path: str, name: str) -> str:
     """Opis diagramu sekwencji: uczestnicy od lewej, komunikaty z numerami VP (1, 1.1, ...), rodzaj, nadawca, odbiorca,
-    operacja; fragmenty (loop/alt/opt) z warunkami."""
+    operacja; fragmenty (loop/alt/opt) z warunkami; refs - użycia innych diagramów (ref) z miejscem: frame albo operand."""
     try:
         p = Project(_check_source(path))
         try:
@@ -469,7 +469,7 @@ SD_DOC = """Dodaje całe diagramy sekwencji (każdy jako osobny diagram). Każdy
    {"type":"loop","guard":"dla każdej pozycji","items":[...]},
    {"type":"opt","guard":"status == W_DOSTAWIE","items":[...]},
    {"type":"alt","operands":[{"guard":"można anulować","items":[...]},{"guard":"else","items":[...]}]},
-   {"type":"ref","diagram":"SD04 Opłać zamówienie","covers":["Klient","zamowienie"]}  /* tylko wewnątrz loop/opt/alt */
+   {"type":"ref","diagram":"SD04 Opłać zamówienie","covers":["Klient","zamowienie"]}  /* może być na najwyższym poziomie (np. początek przepływu «include») albo wewnątrz loop/opt/alt */
  ]}
 Uczestników wskazuje się nazwą aktora albo nazwą obiektu (':Klasa' gdy name puste). Operacja: nazwa(arg1, arg2) — argumenty
 to tylko etykiety, liczy się nazwa i liczba argumentów; metoda musi istnieć w klasie odbiorcy lub jej nadklasie/interfejsie.

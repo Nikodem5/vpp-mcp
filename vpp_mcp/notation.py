@@ -49,6 +49,7 @@ class At:
 @dataclass
 class Lst:
     items: List[Union["Value", At]] = field(default_factory=list)
+    nl_empty: bool = False   # empty list written as "(" NL TABS ")" (VP 18.1); ignored when items exist
 
 
 @dataclass
@@ -243,6 +244,12 @@ class _P:
             self.i += 1
             return Lst(items)
         self.expect("\n")
+        j = self.i
+        self.skip_tabs()
+        if self.peek() == ")":
+            self.i += 1
+            return Lst(items, nl_empty=True)
+        self.i = j
         while True:
             self.skip_tabs()
             if self.peek() == "@":
@@ -288,7 +295,7 @@ def _val(v, d: int) -> str:
         return "{" + _hdr(v) + "".join(_entry(k, x, d + 1) for k, x in v.entries) + "\t" * d + "}}"
     if isinstance(v, Lst):
         if not v.items:
-            return "()"
+            return "(\n" + "\t" * d + ")" if v.nl_empty else "()"
         parts = []
         for it in v.items:
             if isinstance(it, At):

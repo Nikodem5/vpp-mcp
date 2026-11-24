@@ -32,7 +32,7 @@ LABELS = {
     },
 }
 
-COMMON = {"diagram", "positions", "stereotypes", "language", "fragment_diagram", "fragment_context"}
+COMMON = {"diagram", "positions", "stereotypes", "language", "fragment_diagram", "fragment_context", "fragment_folder"}
 
 
 def _lower_first(s: str) -> str:
@@ -378,7 +378,7 @@ def apply_pattern(ed: Editor, name: str, params: Dict[str, Any]) -> List[str]:
         for extra in params.get("fragment_context") or []:
             if extra not in classes:
                 classes.append(extra)
-        out.append(ed.add_class_diagram(fd))
+        out.append(ed.add_class_diagram(fd, folder=params.get("fragment_folder")))
         out.append(ed.add_to_diagram(fd, classes, True))
     out.append("Role we wzorcu: " + "; ".join(c.roles))
     return out

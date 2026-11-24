@@ -70,8 +70,8 @@ class Project:
                 "select ID, MODEL_TYPE, PARENT_ID, NAME, DEFINITION from MODEL_ELEMENT"):
             self.me[i] = Row("MODEL_ELEMENT", i, parse(_txt(d)), mt, pid, name)
         self.dg: Dict[str, Row] = {}
-        for i, dt, name, d in c.execute("select ID, DIAGRAM_TYPE, NAME, DEFINITION from DIAGRAM"):
-            self.dg[i] = Row("DIAGRAM", i, parse(_txt(d)), dt, None, name)
+        for i, dt, pm, name, d in c.execute("select ID, DIAGRAM_TYPE, PARENT_MODEL_ID, NAME, DEFINITION from DIAGRAM"):
+            self.dg[i] = Row("DIAGRAM", i, parse(_txt(d)), dt, pm, name)   # Row.parent = Model folder (PARENT_MODEL_ID)
         self.de: Dict[str, Row] = {}
         for i, st, did, mid, pid, d in c.execute(
                 "select ID, SHAPE_TYPE, DIAGRAM_ID, MODEL_ELEMENT_ID, PARENT_ID, DEFINITION from DIAGRAM_ELEMENT"):

@@ -59,6 +59,7 @@ class Obj:
     type: str
     entries: List[Tuple[str, "Value"]] = field(default_factory=list)
     name_raw: Optional[str] = None   # exact header text when not plain
+    crlf: bool = field(default=False, compare=False)   # root only: row uses CRLF line ends (VP samples)
 
     # ---- convenience -------------------------------------------------
     def get(self, key, default=None):
@@ -271,12 +272,17 @@ class _P:
 
 
 def parse(s: str) -> Obj:
+    # Some VP files (e.g. VP's own samples) store whole definitions with CRLF.
+    # Parse the LF form and remember the convention on the root; dump() restores it.
+    crlf = "\r\n" in s
+    if crlf:
+        s = s.replace("\r\n", "\n")
     p = _P(s)
     oid, name, typ, nraw = p.header()
     ents = p.entries("}")
     if p.i != len(s):
         p.err("trailing data")
-    return Obj(oid, name, typ, ents, nraw)
+    return Obj(oid, name, typ, ents, nraw, crlf=crlf)
 
 
 # ---------------------------------------------------------------- serializer
@@ -311,7 +317,8 @@ def _entry(k, v, d: int) -> str:
 
 
 def dump(o: Obj) -> str:
-    return _hdr(o) + "".join(_entry(k, v, 1) for k, v in o.entries) + "}"
+    out = _hdr(o) + "".join(_entry(k, v, 1) for k, v in o.entries) + "}"
+    return out.replace("\n", "\r\n") if o.crlf else out
 
 
 def roundtrip_ok(s: str) -> bool:

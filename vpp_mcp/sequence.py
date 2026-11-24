@@ -10,7 +10,7 @@ import re
 from typing import Dict, List, Optional
 
 from .notation import Obj, Lst, Raw, parse, dump, ref
-from .project import Project, VppError, ref_id, ref_in_frame
+from .project import Project, VppError, _fold, ref_id, ref_in_frame
 
 OPERATOR = {'alt': 65, 'loop': 71, 'opt': 73}
 OP_TAB_W = {'alt': 23, 'loop': 30, 'opt': 25}
@@ -116,9 +116,17 @@ class Model:
         self.supers = {}
         for rel in p.relationships():
             if rel['kind'] in ('generalization', 'realization'):
-                sub = p.find_class(rel['subclass'] if rel['kind'] == 'generalization' else rel['class']).id
-                sup = p.find_class(rel['superclass'] if rel['kind'] == 'generalization' else rel['interface']).id
+                sub_n = rel['subclass'] if rel['kind'] == 'generalization' else rel['class']
+                sup_n = rel['superclass'] if rel['kind'] == 'generalization' else rel['interface']
+                if not (self._is_classifier(sub_n) and self._is_classifier(sup_n)):
+                    continue  # e.g. actor/use case generalization: carries no operations
+                sub = p.find_class(sub_n).id
+                sup = p.find_class(sup_n).id
                 self.supers.setdefault(sub, []).append(sup)
+
+    def _is_classifier(self, name):
+        names = [r.name or '' for r in self.p.classifiers()]
+        return name in names or _fold(name or '') in [_fold(n) for n in names]
 
     def class_id(self, name):
         return self.p.find_class(name).id

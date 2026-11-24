@@ -401,6 +401,8 @@ class Editor:
             h2 = max(40, h + 15 * lines)
             w2 = max(w, _text_width(text) if text else w)
             self._set_geom(sh, w=w2, h=h2)
+            if lines < 0:               # shrinking leaves line ends floating; growing hides them under the box
+                self._reroute(d.id, sh.id)
 
     def _set_geom(self, sh: Row, x=None, y=None, w=None, h=None):
         o = sh.obj
@@ -445,6 +447,7 @@ class Editor:
             raise VppError(f"{cls.name} nie jest narysowana na diagramie {d.name}.")
         w, h = self._size_for(cls)
         self._set_geom(sh, w=w, h=h)
+        self._reroute(d.id, sh.id)
         return f"{cls.name}: rozmiar {w}x{h}"
 
     def _size_for(self, cls: Row) -> Tuple[int, int]:
@@ -691,6 +694,8 @@ class Editor:
                 w2 = max([w] + [_text_width("«" + n + "»") for n in names])
                 self._set_geom(sh, w=w2, h=max(40, h + 15 * delta))
                 self._set_caption_height(sh, 15 + 15 * len(new))
+                if delta < 0:
+                    self._reroute(d.id, sh.id)
         shown = ", ".join("«" + n + "»" for n in names)
         return f"{cls.name}: stereotyp {shown}" if names else f"{cls.name}: usunięto stereotypy"
 

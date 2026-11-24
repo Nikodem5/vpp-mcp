@@ -194,10 +194,11 @@ class SD:
                 return i
         return -1
 
-    def sender(self, key):
+    def sender(self, key, kind=None):
         p = self.pk[key]
         if p['kind'] == 'actor':
-            del self.stack[:]
+            if kind != 'sig':           # an actor's signal inside a call must not close activations
+                del self.stack[:]
             return None
         i = self.find(key)
         if i >= 0:
@@ -292,7 +293,7 @@ class SD:
                 self.cursor += 40
             elif k == 'sig':
                 _, f, t, text = it
-                fa = self.sender(f)
+                fa = self.sender(f, 'sig')
                 seq = self.number(fa)
                 self.msg('sig', f, t, self.cursor, seq, fa=fa, name=text, text=text)
                 self.cursor += 40

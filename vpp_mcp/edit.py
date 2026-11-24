@@ -847,7 +847,7 @@ class Editor:
                 f, t = o.get("fromModel"), o.get("toModel")
                 if not (isinstance(f, Raw) and isinstance(t, Raw)):
                     continue
-                ia, ib = f.text.strip("<>"), t.text.strip("<>")
+                ia, ib = ref_id(f.text), ref_id(t.text)
                 if ia not in drawn or ib not in drawn:
                     continue
                 sa, sb = self.p.shape_of(ia, d.id), self.p.shape_of(ib, d.id)

@@ -6,10 +6,11 @@ in VP 2026 (see vpp-zasady/02_diagramy_sekwencji.md).
 """
 from __future__ import annotations
 
+import re
 from typing import Dict, List, Optional
 
 from .notation import Obj, Lst, Raw, parse, dump, ref
-from .project import Project, VppError
+from .project import Project, VppError, ref_id, ref_in_frame
 
 OPERATOR = {'alt': 65, 'loop': 71, 'opt': 73}
 OP_TAB_W = {'alt': 23, 'loop': 30, 'opt': 25}
@@ -781,7 +782,7 @@ def _frames_by_name(p: Project) -> Dict[str, str]:
         if d.model_type == 'InteractionDiagram':
             f = d.obj.get('_rootFrame')
             if isinstance(f, Raw):
-                out[d.name] = f.text.strip('<>')
+                out[d.name] = ref_id(f.text)
     return out
 
 
@@ -840,7 +841,7 @@ def build_sequence_diagrams(ed, specs: List[dict]) -> List[str]:
 def delete_sequence_diagram(ed, name: str) -> str:
     p = ed.p
     d = p.find_diagram(name, 'InteractionDiagram')
-    frame = d.obj.get('_rootFrame').text.strip('<>')
+    frame = ref_id(d.obj.get('_rootFrame').text)
     # every model element owned (transitively) by the frame
     owned, frontier = {frame}, [frame]
     while frontier:
@@ -852,13 +853,13 @@ def delete_sequence_diagram(ed, name: str) -> str:
     for i, r in p.me.items():
         if r.model_type == 'Message':
             txt = dump(r.obj)
-            if f'<{frame}:' in txt:
+            if f'<{frame}:' in txt or re.search(r'[<:]' + re.escape(frame) + ':', txt):
                 msgs.add(i)
     # refs from other diagrams to this frame
     for i, r in p.me.items():
-        if r.model_type == 'InteractionOccurrence' and i not in owned and r.obj.text('refersTo') == f'<{frame}>':
+        if r.model_type == 'InteractionOccurrence' and i not in owned and ref_id(r.obj.text('refersTo') or '') == frame:
             user = next((dd.name for dd in p.dg.values() if dd.model_type == 'InteractionDiagram'
-                         and _under(p, i, dd.obj.get('_rootFrame').text.strip('<>'))), '?')
+                         and _under(p, i, ref_id(dd.obj.get('_rootFrame').text))), '?')
             raise VppError(f'Diagram {name} jest użyty przez ref w diagramie {user}. Usuń najpierw tamten diagram albo jego ref.')
     gone = owned | msgs
     for c in p.me.values():
@@ -884,14 +885,27 @@ def delete_sequence_diagram(ed, name: str) -> str:
     ed.dirty_dg.discard(d.id)
     for lst in (p.root_list, p.diagram_list):
         v = lst.get('Child')
-        v.items = [it for it in v.items if it.text.strip('<>') not in (frame, d.id)]
+        v.items = [it for it in v.items if ref_id(it.text) not in (frame, d.id)]
+    # drop the diagram from every owner's _subDiagrams list (quoted ids, as VP writes them; refs tolerated)
+    for m in p.me.values():
+        sd = m.obj.get('_subDiagrams')
+        if isinstance(sd, Lst):
+            keep = [it for it in sd.items if not (isinstance(it, Raw) and ref_id(it.text) == d.id)]
+            if len(keep) != len(sd.items):
+                sd.items = keep
+                ed.touch(m)
+    # caches / documentation tied to this diagram
+    for (path,) in c.execute('select PATH from PROJECT_FILE').fetchall():
+        if path in (f'vpdiagramshapes/{d.id}.vps/details.xml', f'HTMLStringProperties/{d.id}_documentation') \
+                or (path.startswith('diagramPreviewData/') and re.search(r'(^|[/:])' + re.escape(d.id) + r'($|[/:])', path[len('diagramPreviewData/'):])):
+            c.execute('delete from PROJECT_FILE where PATH=?', (path,))
     ed.dirty_info = True
     return f'Usunięto diagram sekwencji {name} ({len(owned)} elementów modelu, {len(msgs)} komunikatów)'
 
 
 def describe_sequence_diagram(p: Project, name: str) -> dict:
     d = p.find_diagram(name, 'InteractionDiagram')
-    frame = d.obj.get('_rootFrame').text.strip('<>')
+    frame = ref_id(d.obj.get('_rootFrame').text)
     parts = []
     for rr in d.obj.refs('Child'):
         sh = p.de.get(rr.split(':')[-1])
@@ -920,7 +934,7 @@ def describe_sequence_diagram(p: Project, name: str) -> dict:
         if not (isinstance(f, Obj) and isinstance(t, Obj)):
             continue
         fe, te = f.text('EndModelElement') or '', t.text('EndModelElement') or ''
-        if not te.startswith(f'<{frame}:'):
+        if not ref_in_frame(te, frame):
             continue
         at = r.obj.get('actionType')
         op = at.get('operation') if isinstance(at, Obj) else None

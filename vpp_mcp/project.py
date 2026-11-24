@@ -17,6 +17,16 @@ class VppError(Exception):
     pass
 
 
+def ref_id(text: str) -> str:
+    """Bare element id from a reference: ``<id>``, ``<model:id>``, ``<a:b:id>`` or ``<cls$op>``."""
+    return text.strip('<>"').split("$")[0].split(":")[-1]
+
+
+def ref_in_frame(text: str, frame: str) -> bool:
+    """True when ``<frame:x>`` or a path-qualified ``<model:frame:x>`` reference points into ``frame``."""
+    return frame in text.strip('<>').split("$")[0].split(":")[:-1]
+
+
 def lock_path(path: str) -> str:
     d, f = os.path.split(os.path.abspath(path))
     return os.path.join(d, "." + f + ".lck")
@@ -133,7 +143,7 @@ class Project:
 
     def name_of(self, ref_text: str) -> str:
         """Human name for a ``<id>``/path reference to a model element."""
-        rid = ref_text.strip("<>").split("$")[0].split(":")[-1]
+        rid = ref_id(ref_text)
         r = self.me.get(rid)
         return r.name if r and r.name else rid
 
